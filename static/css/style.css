@@ -1,0 +1,13 @@
+.glass {
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(20px);
+}
+
+input:focus {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
+}
+
+/* Scrollbar élégante */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 10px; }
