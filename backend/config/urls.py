@@ -7,7 +7,7 @@ urlpatterns = [
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/users/', include('users.urls')),
-    path('api/owners/', include('owners.urls')),
-    path('api/properties/', include('properties.urls')),
+    path('api/', include('owners.urls')),
+    path('api/', include('properties.urls')),
     path('api-auth/', include('rest_framework.urls')),
 ]

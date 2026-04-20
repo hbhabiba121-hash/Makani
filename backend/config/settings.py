@@ -40,16 +40,16 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # Third party
-    'rest_framework',  # Make sure this is here
+    'rest_framework',
     'rest_framework_simplejwt',
+    'corsheaders',  # ← Moved BEFORE local apps
     # Local apps
     'users',
     'agencies',
     'owners',
-    'properties',
+    'properties',  # ← Confirm this line exists
     'financials',
     'reports',
-    'corsheaders',
 ]
 
 # Add REST_FRAMEWORK settings at the bottom
