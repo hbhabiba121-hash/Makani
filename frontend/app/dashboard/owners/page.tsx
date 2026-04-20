@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Mail, Phone, Building2, MoreVertical, Users, Loader2, X, Edit, Trash2, Eye } from "lucide-react";
+import { Plus, Mail, Phone, Building2, MoreVertical, Users, Loader2, X, Edit, Trash2, Eye, Copy } from "lucide-react";
 import api from "@/lib/axios";
 
 interface Owner {
@@ -30,7 +30,11 @@ export default function OwnersPage() {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null);
+  const [newOwnerPassword, setNewOwnerPassword] = useState("");
+  const [newOwnerEmail, setNewOwnerEmail] = useState("");
+  const [newOwnerName, setNewOwnerName] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -75,51 +79,63 @@ export default function OwnersPage() {
     }
   };
 
-  const handleSubmit = async () => {
-    setFormError("");
-    if (!form.full_name || !form.email) {
-      setFormError("Please fill all required fields.");
-      return;
-    }
-    const parts = form.full_name.trim().split(" ");
-    const first_name = parts[0];
-    const last_name = parts.slice(1).join(" ") || parts[0];
+const handleSubmit = async () => {
+  setFormError("");
+  if (!form.full_name || !form.email) {
+    setFormError("Please fill all required fields.");
+    return;
+  }
+  const parts = form.full_name.trim().split(" ");
+  const first_name = parts[0];
+  const last_name = parts.slice(1).join(" ") || parts[0];
 
-    setSubmitting(true);
-    try {
-      if (selectedOwner) {
-        // UPDATE
-        await api.put(`/api/owners/${selectedOwner.id}/`, {
-          first_name,
-          last_name,
-          email: form.email,
-          phone: form.phone,
-          address: form.address,
-        });
-      } else {
-        // CREATE
-        await api.post("/api/owners/", {
-          first_name,
-          last_name,
-          email: form.email,
-          phone: form.phone,
-          address: form.address,
-        });
+  setSubmitting(true);
+  try {
+    if (selectedOwner) {
+      // UPDATE - Use PUT request
+      await api.put(`/api/owners/${selectedOwner.id}/`, {
+        first_name,
+        last_name,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+      });
+    } else {
+      // CREATE - Use POST request
+      const response = await api.post("/api/owners/", {
+        first_name,
+        last_name,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+      });
+      
+      // Show password modal only for new owners
+      if (response.data.temp_password) {
+        setNewOwnerPassword(response.data.temp_password);
+        setNewOwnerEmail(form.email);
+        setNewOwnerName(form.full_name);
+        setShowPasswordModal(true);
       }
-      setShowModal(false);
-      setForm(emptyForm);
-      setSelectedOwner(null);
-      fetchOwners();
-    } catch (err: any) {
-      if (err.response?.data?.email) {
-        setFormError(err.response.data.email[0]);
-      } else {
-        setFormError("Something went wrong. Please try again.");
-      }
-    } finally {
-      setSubmitting(false);
     }
-  };
+    
+    setShowModal(false);
+    setForm(emptyForm);
+    setSelectedOwner(null);
+    fetchOwners();
+  } catch (err: any) {
+    console.error("Error:", err);
+    if (err.response?.data?.email) {
+      setFormError(err.response.data.email[0]);
+    } else if (err.response?.data?.detail) {
+      setFormError(err.response.data.detail);
+    } else {
+      setFormError("Something went wrong. Please try again.");
+    }
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const handleDelete = async () => {
     if (!selectedOwner) return;
@@ -152,6 +168,11 @@ export default function OwnersPage() {
     setSelectedOwner(owner);
     setShowDetailsModal(true);
     setShowMenu(null);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert("Password copied to clipboard!");
   };
 
   const getInitials = (name: string) => {
@@ -307,6 +328,63 @@ export default function OwnersPage() {
           </table>
         )}
       </div>
+
+      {/* Password Display Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md transform transition-all">
+            <div className="p-8">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Owner Created Successfully!</h2>
+                <p className="text-gray-500 mt-2">Here are the login credentials</p>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                <div className="mb-3">
+                  <label className="text-xs text-gray-500 font-medium">Name</label>
+                  <p className="text-gray-900 font-semibold">{newOwnerName}</p>
+                </div>
+                <div className="mb-3">
+                  <label className="text-xs text-gray-500 font-medium">Email</label>
+                  <p className="text-gray-900 font-semibold">{newOwnerEmail}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-medium">Temporary Password</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="flex-1 bg-white px-3 py-2 rounded-lg text-sm font-mono text-[#581c87] border border-gray-200">
+                      {newOwnerPassword}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(newOwnerPassword)}
+                      className="p-2 bg-[#581c87] text-white rounded-lg hover:bg-[#4c1d95] transition-all"
+                    >
+                      <Copy size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ Please share these credentials with the owner. They can change their password after first login.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="w-full py-3 rounded-xl bg-[#581c87] text-white font-semibold hover:bg-[#4c1d95] transition-all"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       {showModal && (
