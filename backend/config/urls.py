@@ -10,4 +10,6 @@ urlpatterns = [
     path('api/owners/', include('owners.urls')),
     path('api/properties/', include('properties.urls')),
     path('api-auth/', include('rest_framework.urls')),
+    path('', include('financials.urls')),
+    path('', include('reports.urls')),  # Add this line
 ]
