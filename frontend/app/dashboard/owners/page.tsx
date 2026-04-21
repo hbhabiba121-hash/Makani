@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Mail, Phone, Building2, MoreVertical, Users, Loader2, X, Edit, Trash2, Eye } from "lucide-react";
+import { Plus, Mail, Phone, Building2, MoreVertical, Users, Loader2, X, Edit, Trash2, Eye, Copy } from "lucide-react";
 import api from "@/lib/axios";
 
 interface Owner {
@@ -14,6 +14,12 @@ interface Owner {
   created_at: string;
   properties_count?: number;
   total_earnings?: number;
+}
+
+interface Property {
+  id: number;
+  monthly_rent: number;
+  owner: number;
 }
 
 const emptyForm = {
@@ -30,7 +36,11 @@ export default function OwnersPage() {
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedOwner, setSelectedOwner] = useState<Owner | null>(null);
+  const [newOwnerPassword, setNewOwnerPassword] = useState("");
+  const [newOwnerEmail, setNewOwnerEmail] = useState("");
+  const [newOwnerName, setNewOwnerName] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -39,41 +49,76 @@ export default function OwnersPage() {
   useEffect(() => {
     const token = localStorage.getItem("access");
     if (!token) router.push("/login");
-  }, []);
-
-  useEffect(() => {
-    fetchOwners();
-  }, []);
+  }, [router]);
 
   const fetchOwners = async () => {
     try {
-      const res = await api.get("/api/owners/");
-      const data = Array.isArray(res.data) ? res.data : res.data.results ?? [];
+      setLoading(true);
+      // Fetch all owners first
+      const ownersRes = await api.get("/api/owners/");
+      const ownersData = Array.isArray(ownersRes.data) ? ownersRes.data : ownersRes.data.results ?? [];
       
-      // Fetch property counts for each owner (optional)
-      const ownersWithStats = await Promise.all(
-        data.map(async (owner: Owner) => {
-          try {
-            const propsRes = await api.get(`/api/properties/?owner=${owner.id}`);
-            const properties = Array.isArray(propsRes.data) ? propsRes.data : propsRes.data.results ?? [];
-            return {
-              ...owner,
-              properties_count: properties.length,
-              total_earnings: properties.reduce((sum: number, p: any) => sum + Number(p.monthly_rent), 0)
-            };
-          } catch {
-            return { ...owner, properties_count: 0, total_earnings: 0 };
-          }
-        })
-      );
+      if (ownersData.length === 0) {
+        setOwners([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch ALL properties in one request (or paginated if needed)
+      let allProperties: Property[] = [];
+      try {
+        const propertiesRes = await api.get("/api/properties/");
+        allProperties = Array.isArray(propertiesRes.data) 
+          ? propertiesRes.data 
+          : propertiesRes.data.results ?? [];
+      } catch (propError) {
+        console.error("Error fetching properties:", propError);
+        // If properties fetch fails, still show owners without stats
+        setOwners(ownersData.map((owner: Owner) => ({
+          ...owner,
+          properties_count: 0,
+          total_earnings: 0
+        })));
+        setLoading(false);
+        return;
+      }
+
+      // Calculate stats for each owner by filtering properties
+      const ownersWithStats = ownersData.map((owner: Owner) => {
+        const ownerProperties = allProperties.filter(
+          (property: Property) => property.owner === owner.id
+        );
+        
+        const properties_count = ownerProperties.length;
+        const total_earnings = ownerProperties.reduce(
+          (sum: number, property: Property) => sum + (Number(property.monthly_rent) || 0), 
+          0
+        );
+        
+        return {
+          ...owner,
+          properties_count,
+          total_earnings,
+        };
+      });
       
       setOwners(ownersWithStats);
     } catch (err) {
       console.error("Error fetching owners:", err);
+      // Show error to user
+      setOwners([]);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+  const load = async () => {
+    await fetchOwners();
+  };
+
+  load();
+}, []);
 
   const handleSubmit = async () => {
     setFormError("");
@@ -88,7 +133,7 @@ export default function OwnersPage() {
     setSubmitting(true);
     try {
       if (selectedOwner) {
-        // UPDATE
+        // UPDATE - Use PUT request
         await api.put(`/api/owners/${selectedOwner.id}/`, {
           first_name,
           last_name,
@@ -97,22 +142,35 @@ export default function OwnersPage() {
           address: form.address,
         });
       } else {
-        // CREATE
-        await api.post("/api/owners/", {
+        // CREATE - Use POST request
+        const response = await api.post("/api/owners/", {
           first_name,
           last_name,
           email: form.email,
           phone: form.phone,
           address: form.address,
         });
+        
+        // Show password modal only for new owners
+        if (response.data.temp_password) {
+          setNewOwnerPassword(response.data.temp_password);
+          setNewOwnerEmail(form.email);
+          setNewOwnerName(form.full_name);
+          setShowPasswordModal(true);
+        }
       }
+      
       setShowModal(false);
       setForm(emptyForm);
       setSelectedOwner(null);
       fetchOwners();
-    } catch (err: any) {
-      if (err.response?.data?.email) {
-        setFormError(err.response.data.email[0]);
+    } catch (err: unknown) {
+      console.error("Error:", err);
+      const error = err as { response?: { data?: { email?: string[]; detail?: string } } };
+      if (error.response?.data?.email) {
+        setFormError(error.response.data.email[0]);
+      } else if (error.response?.data?.detail) {
+        setFormError(error.response.data.detail);
       } else {
         setFormError("Something went wrong. Please try again.");
       }
@@ -130,6 +188,7 @@ export default function OwnersPage() {
       setSelectedOwner(null);
       fetchOwners();
     } catch (err) {
+      console.error("Delete error:", err);
       alert("Failed to delete owner. Make sure they have no properties assigned.");
     } finally {
       setSubmitting(false);
@@ -152,6 +211,11 @@ export default function OwnersPage() {
     setSelectedOwner(owner);
     setShowDetailsModal(true);
     setShowMenu(null);
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert("Password copied to clipboard!");
   };
 
   const getInitials = (name: string) => {
@@ -308,6 +372,63 @@ export default function OwnersPage() {
         )}
       </div>
 
+      {/* Password Display Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md transform transition-all">
+            <div className="p-8">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Owner Created Successfully!</h2>
+                <p className="text-gray-500 mt-2">Here are the login credentials</p>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+                <div className="mb-3">
+                  <label className="text-xs text-gray-500 font-medium">Name</label>
+                  <p className="text-gray-900 font-semibold">{newOwnerName}</p>
+                </div>
+                <div className="mb-3">
+                  <label className="text-xs text-gray-500 font-medium">Email</label>
+                  <p className="text-gray-900 font-semibold">{newOwnerEmail}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 font-medium">Temporary Password</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="flex-1 bg-white px-3 py-2 rounded-lg text-sm font-mono text-[#581c87] border border-gray-200">
+                      {newOwnerPassword}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(newOwnerPassword)}
+                      className="p-2 bg-[#581c87] text-white rounded-lg hover:bg-[#4c1d95] transition-all"
+                    >
+                      <Copy size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ Please share these credentials with the owner. They can change their password after first login.
+                </p>
+              </div>
+
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="w-full py-3 rounded-xl bg-[#581c87] text-white font-semibold hover:bg-[#4c1d95] transition-all"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -379,7 +500,7 @@ export default function OwnersPage() {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="flex-1 py-3 rounded-xl bg-[#581c87] text-white font-semibold hover:bg-[#4c1d95] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#581c87]/20"
+                  className="flex-1 py-3 rounded-xl bg-[#581c87] text-white font-semibold hover:bg-[#4c1d95] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#581c87]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? <Loader2 className="animate-spin" size={18} /> : (selectedOwner ? "Update Owner" : "Add Owner")}
                 </button>
@@ -396,7 +517,7 @@ export default function OwnersPage() {
             <div className="p-8">
               <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Owner</h2>
               <p className="text-gray-500 mb-6">
-                Are you sure you want to delete "{selectedOwner.full_name}"? This action cannot be undone.
+                Are you sure you want to delete &quot;{selectedOwner.full_name}&quot;? This action cannot be undone.
                 {selectedOwner.properties_count && selectedOwner.properties_count > 0 && (
                   <span className="block mt-2 text-red-500">
                     Warning: This owner has {selectedOwner.properties_count} properties. Please reassign or delete them first.
@@ -412,7 +533,7 @@ export default function OwnersPage() {
                 </button>
                 <button
                   onClick={handleDelete}
-                  disabled={submitting || (selectedOwner.properties_count && selectedOwner.properties_count > 0)}
+                  disabled={submitting || (selectedOwner.properties_count !== undefined && selectedOwner.properties_count > 0)}
                   className="flex-1 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? <Loader2 className="animate-spin" size={18} /> : "Delete"}
