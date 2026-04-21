@@ -16,6 +16,12 @@ interface Owner {
   total_earnings?: number;
 }
 
+interface Property {
+  id: number;
+  monthly_rent: number;
+  owner: number;
+}
+
 const emptyForm = {
   full_name: "",
   email: "",
@@ -43,99 +49,135 @@ export default function OwnersPage() {
   useEffect(() => {
     const token = localStorage.getItem("access");
     if (!token) router.push("/login");
-  }, []);
-
-  useEffect(() => {
-    fetchOwners();
-  }, []);
+  }, [router]);
 
   const fetchOwners = async () => {
     try {
-      const res = await api.get("/api/owners/");
-      const data = Array.isArray(res.data) ? res.data : res.data.results ?? [];
+      setLoading(true);
+      // Fetch all owners first
+      const ownersRes = await api.get("/api/owners/");
+      const ownersData = Array.isArray(ownersRes.data) ? ownersRes.data : ownersRes.data.results ?? [];
       
-      // Fetch property counts for each owner (optional)
-      const ownersWithStats = await Promise.all(
-        data.map(async (owner: Owner) => {
-          try {
-            const propsRes = await api.get(`/api/properties/?owner=${owner.id}`);
-            const properties = Array.isArray(propsRes.data) ? propsRes.data : propsRes.data.results ?? [];
-            return {
-              ...owner,
-              properties_count: properties.length,
-              total_earnings: properties.reduce((sum: number, p: any) => sum + Number(p.monthly_rent), 0)
-            };
-          } catch {
-            return { ...owner, properties_count: 0, total_earnings: 0 };
-          }
-        })
-      );
+      if (ownersData.length === 0) {
+        setOwners([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch ALL properties in one request (or paginated if needed)
+      let allProperties: Property[] = [];
+      try {
+        const propertiesRes = await api.get("/api/properties/");
+        allProperties = Array.isArray(propertiesRes.data) 
+          ? propertiesRes.data 
+          : propertiesRes.data.results ?? [];
+      } catch (propError) {
+        console.error("Error fetching properties:", propError);
+        // If properties fetch fails, still show owners without stats
+        setOwners(ownersData.map((owner: Owner) => ({
+          ...owner,
+          properties_count: 0,
+          total_earnings: 0
+        })));
+        setLoading(false);
+        return;
+      }
+
+      // Calculate stats for each owner by filtering properties
+      const ownersWithStats = ownersData.map((owner: Owner) => {
+        const ownerProperties = allProperties.filter(
+          (property: Property) => property.owner === owner.id
+        );
+        
+        const properties_count = ownerProperties.length;
+        const total_earnings = ownerProperties.reduce(
+          (sum: number, property: Property) => sum + (Number(property.monthly_rent) || 0), 
+          0
+        );
+        
+        return {
+          ...owner,
+          properties_count,
+          total_earnings,
+        };
+      });
       
       setOwners(ownersWithStats);
     } catch (err) {
       console.error("Error fetching owners:", err);
+      // Show error to user
+      setOwners([]);
     } finally {
       setLoading(false);
     }
   };
 
-const handleSubmit = async () => {
-  setFormError("");
-  if (!form.full_name || !form.email) {
-    setFormError("Please fill all required fields.");
-    return;
-  }
-  const parts = form.full_name.trim().split(" ");
-  const first_name = parts[0];
-  const last_name = parts.slice(1).join(" ") || parts[0];
+  useEffect(() => {
+  const load = async () => {
+    await fetchOwners();
+  };
 
-  setSubmitting(true);
-  try {
-    if (selectedOwner) {
-      // UPDATE - Use PUT request
-      await api.put(`/api/owners/${selectedOwner.id}/`, {
-        first_name,
-        last_name,
-        email: form.email,
-        phone: form.phone,
-        address: form.address,
-      });
-    } else {
-      // CREATE - Use POST request
-      const response = await api.post("/api/owners/", {
-        first_name,
-        last_name,
-        email: form.email,
-        phone: form.phone,
-        address: form.address,
-      });
-      
-      // Show password modal only for new owners
-      if (response.data.temp_password) {
-        setNewOwnerPassword(response.data.temp_password);
-        setNewOwnerEmail(form.email);
-        setNewOwnerName(form.full_name);
-        setShowPasswordModal(true);
+  load();
+}, []);
+
+  const handleSubmit = async () => {
+    setFormError("");
+    if (!form.full_name || !form.email) {
+      setFormError("Please fill all required fields.");
+      return;
+    }
+    const parts = form.full_name.trim().split(" ");
+    const first_name = parts[0];
+    const last_name = parts.slice(1).join(" ") || parts[0];
+
+    setSubmitting(true);
+    try {
+      if (selectedOwner) {
+        // UPDATE - Use PUT request
+        await api.put(`/api/owners/${selectedOwner.id}/`, {
+          first_name,
+          last_name,
+          email: form.email,
+          phone: form.phone,
+          address: form.address,
+        });
+      } else {
+        // CREATE - Use POST request
+        const response = await api.post("/api/owners/", {
+          first_name,
+          last_name,
+          email: form.email,
+          phone: form.phone,
+          address: form.address,
+        });
+        
+        // Show password modal only for new owners
+        if (response.data.temp_password) {
+          setNewOwnerPassword(response.data.temp_password);
+          setNewOwnerEmail(form.email);
+          setNewOwnerName(form.full_name);
+          setShowPasswordModal(true);
+        }
       }
+      
+      setShowModal(false);
+      setForm(emptyForm);
+      setSelectedOwner(null);
+      fetchOwners();
+    } catch (err: unknown) {
+      console.error("Error:", err);
+      const error = err as { response?: { data?: { email?: string[]; detail?: string } } };
+      if (error.response?.data?.email) {
+        setFormError(error.response.data.email[0]);
+      } else if (error.response?.data?.detail) {
+        setFormError(error.response.data.detail);
+      } else {
+        setFormError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setSubmitting(false);
     }
-    
-    setShowModal(false);
-    setForm(emptyForm);
-    setSelectedOwner(null);
-    fetchOwners();
-  } catch (err: any) {
-    console.error("Error:", err);
-    if (err.response?.data?.email) {
-      setFormError(err.response.data.email[0]);
-    } else if (err.response?.data?.detail) {
-      setFormError(err.response.data.detail);
-    } else {
-      setFormError("Something went wrong. Please try again.");
-    }
-  } finally {
-    setSubmitting(false);
-  }
-};
+  };
 
   const handleDelete = async () => {
     if (!selectedOwner) return;
@@ -146,6 +188,7 @@ const handleSubmit = async () => {
       setSelectedOwner(null);
       fetchOwners();
     } catch (err) {
+      console.error("Delete error:", err);
       alert("Failed to delete owner. Make sure they have no properties assigned.");
     } finally {
       setSubmitting(false);
@@ -457,7 +500,7 @@ const handleSubmit = async () => {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting}
-                  className="flex-1 py-3 rounded-xl bg-[#581c87] text-white font-semibold hover:bg-[#4c1d95] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#581c87]/20"
+                  className="flex-1 py-3 rounded-xl bg-[#581c87] text-white font-semibold hover:bg-[#4c1d95] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#581c87]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? <Loader2 className="animate-spin" size={18} /> : (selectedOwner ? "Update Owner" : "Add Owner")}
                 </button>
@@ -474,7 +517,7 @@ const handleSubmit = async () => {
             <div className="p-8">
               <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Owner</h2>
               <p className="text-gray-500 mb-6">
-                Are you sure you want to delete "{selectedOwner.full_name}"? This action cannot be undone.
+                Are you sure you want to delete &quot;{selectedOwner.full_name}&quot;? This action cannot be undone.
                 {selectedOwner.properties_count && selectedOwner.properties_count > 0 && (
                   <span className="block mt-2 text-red-500">
                     Warning: This owner has {selectedOwner.properties_count} properties. Please reassign or delete them first.
@@ -490,7 +533,7 @@ const handleSubmit = async () => {
                 </button>
                 <button
                   onClick={handleDelete}
-                  disabled={submitting || (selectedOwner.properties_count && selectedOwner.properties_count > 0)}
+                  disabled={submitting || (selectedOwner.properties_count !== undefined && selectedOwner.properties_count > 0)}
                   className="flex-1 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? <Loader2 className="animate-spin" size={18} /> : "Delete"}

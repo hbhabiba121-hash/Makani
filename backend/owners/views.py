@@ -51,3 +51,9 @@ class OwnerViewSet(viewsets.ModelViewSet):
         # Return the updated owner with full details
         owner_serializer = OwnerSerializer(instance)
         return Response(owner_serializer.data)
+    def perform_create(self, serializer):
+       owner = serializer.save()
+       if self.request.user.role != 'admin' or not owner.user.agency:
+        owner.user.agency = self.request.user.agency
+        owner.user.save()
+    

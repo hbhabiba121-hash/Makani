@@ -3,24 +3,28 @@ from .models import Owner
 from users.serializers import UserSerializer
 
 class OwnerSerializer(serializers.ModelSerializer):
-    full_name = serializers.SerializerMethodField()
-    email = serializers.SerializerMethodField()
+    """Serializer for Owner model with flattened user data."""
+
+    full_name = serializers.SerializerMethodField(method_name='getFullName')
+    email = serializers.SerializerMethodField(method_name='getEmail')
     user_details = UserSerializer(source='user', read_only=True)
-    
+
     class Meta:
         model = Owner
         fields = [
-            'id', 'user', 'user_details', 'email', 'full_name',
-            'phone', 'address', 'created_at', 'updated_at'
+            'id', 'full_name', 'email', 'phone', 'address',
+            'user_details', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
-    
-    def get_full_name(self, obj):
-        return f"{obj.user.first_name} {obj.user.last_name}".strip()
-    
-    def get_email(self, obj):
-        return obj.user.email
 
+    def getFullName(self, obj):
+        """Return owner full name from linked user."""
+        return f"{obj.user.first_name} {obj.user.last_name}".strip()
+
+    def getEmail(self, obj):
+        """Return owner email from linked user."""
+        return obj.user.email
+    
 
 class CreateOwnerSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(write_only=True)
