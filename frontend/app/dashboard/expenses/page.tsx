@@ -24,11 +24,10 @@ export default function ExpensesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loadingProps, setLoadingProps] = useState(true);
-  const [loadingExpenses, setLoadingExpenses] = useState(false); // Khallitha false bach tban l-table khawya kima bghiti
+  const [loadingExpenses, setLoadingExpenses] = useState(false); 
 
   useEffect(() => {
     fetchProperties();
-    // fetchExpenses(); // Hna t9der t-activiha fach t-m9ad l-endpoint f l-backend
   }, []);
 
   const fetchProperties = async () => {
@@ -46,7 +45,6 @@ export default function ExpensesPage() {
   return (
     <div className="p-8 bg-[#f8fafc] min-h-screen relative">
       
-      {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-[#1e293b]">Expense Management</h1>
@@ -62,7 +60,6 @@ export default function ExpensesPage() {
         </button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <StatCard title="Total Expenses" value="$2,315" valueColor="text-red-600" />
         <StatCard title="Top Category" value="Maintenance" />
@@ -70,7 +67,6 @@ export default function ExpensesPage() {
         <StatCard title="With Receipts" value="5" valueColor="text-green-600" />
       </div>
 
-      {/* Breakdown Cards */}
       <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mb-8">
         <h2 className="text-lg font-bold text-slate-800 mb-6">Expense Breakdown by Category</h2>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
@@ -82,13 +78,11 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-4 mb-6">
         <FilterSelect label="All Properties" options={properties} loading={loadingProps} />
         <FilterSelect label="All Categories" options={["Cleaning", "WiFi", "Electricity", "Maintenance", "Supplies"]} />
       </div>
 
-      {/* Expenses Table */}
       <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-50">
           <h3 className="font-bold text-slate-800 text-lg">All Expenses</h3>
@@ -155,7 +149,6 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      {/* Modal dyal Add Expense (Khlitou kima hwa) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -224,7 +217,6 @@ export default function ExpensesPage() {
   );
 }
 
-// Helpers
 function StatCard({ title, value, valueColor = "text-slate-900" }: { title: string; value: string; valueColor?: string }) {
   return (
     <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
