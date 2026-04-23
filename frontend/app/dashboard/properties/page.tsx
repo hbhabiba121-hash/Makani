@@ -21,6 +21,12 @@ interface Property {
   description?: string;
   area_sqm?: number;
   images?: PropertyImage[];
+  living_rooms?: number;
+  kitchen_status?: number;
+  dining_room?: number;
+  has_balcony?: boolean;
+  has_garden?: boolean;
+  parking_status?: string;
 }
 
 interface PropertyImage {
@@ -38,12 +44,19 @@ const emptyForm = {
   name: "",
   location: "",
   property_type: "",
+  property_type_other: "",
   bedrooms: "",
   bathrooms: "",
   area_sqm: "",
   monthly_rent: "",
   owner: "",
   description: "",
+  living_rooms: "",
+  kitchen_status: "",
+  dining_room: "",
+  has_balcony: "no",
+  has_garden: "no",
+  parking_status: "no",
 };
 
 export default function PropertiesPage() {
@@ -97,34 +110,27 @@ export default function PropertiesPage() {
       setFormError("Please fill all required fields.");
       return;
     }
+    if (form.property_type === "other" && !form.property_type_other) {
+      setFormError("Please specify the property type.");
+      return;
+    }
     setSubmitting(true);
     try {
+      const payload = {
+        name: form.name,
+        location: form.location,
+        property_type: form.property_type === "other" ? "other" : form.property_type,
+        description: form.property_type === "other" ? `Type: ${form.property_type_other}. ${form.description}` : form.description,
+        bedrooms: Number(form.bedrooms) || 1,
+        bathrooms: Number(form.bathrooms) || 1,
+        area_sqm: Number(form.area_sqm) || 0,
+        monthly_rent: Number(form.monthly_rent) || 0,
+        owner: Number(form.owner),
+      };
       if (selectedProperty) {
-        // UPDATE
-        await api.put(`/api/properties/${selectedProperty.id}/`, {
-          name: form.name,
-          location: form.location,
-          property_type: form.property_type,
-          bedrooms: Number(form.bedrooms) || 1,
-          bathrooms: Number(form.bathrooms) || 1,
-          area_sqm: Number(form.area_sqm) || 0,
-          monthly_rent: Number(form.monthly_rent) || 0,
-          owner: Number(form.owner),
-          description: form.description,
-        });
+        await api.put(`/api/properties/${selectedProperty.id}/`, payload);
       } else {
-        // CREATE
-        await api.post("/api/properties/", {
-          name: form.name,
-          location: form.location,
-          property_type: form.property_type,
-          bedrooms: Number(form.bedrooms) || 1,
-          bathrooms: Number(form.bathrooms) || 1,
-          area_sqm: Number(form.area_sqm) || 0,
-          monthly_rent: Number(form.monthly_rent) || 0,
-          owner: Number(form.owner),
-          description: form.description,
-        });
+        await api.post("/api/properties/", payload);
       }
       setShowModal(false);
       setForm(emptyForm);
@@ -158,12 +164,19 @@ export default function PropertiesPage() {
       name: property.name,
       location: property.location,
       property_type: property.property_type,
+      property_type_other: "",
       bedrooms: property.bedrooms.toString(),
       bathrooms: property.bathrooms.toString(),
       area_sqm: property.area_sqm?.toString() || "",
       monthly_rent: property.monthly_rent.toString(),
       owner: property.owner.toString(),
       description: property.description || "",
+      living_rooms: property.living_rooms?.toString() || "",
+      kitchen_status: property.kitchen_status?.toString() || "",
+      dining_room: property.dining_room?.toString() || "",
+      has_balcony: property.has_balcony ? "yes" : "no",
+      has_garden: property.has_garden ? "yes" : "no",
+      parking_status: property.parking_status || "no",
     });
     setShowModal(true);
     setShowMenu(null);
@@ -174,15 +187,13 @@ export default function PropertiesPage() {
     for (let i = 0; i < files.length; i++) {
       formData.append('images', files[i]);
     }
-    
     try {
       await api.post(`/api/properties/${propertyId}/upload-images/`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      fetchProperties(); // Refresh to show new images
+      fetchProperties();
     } catch (err) {
       console.error("Error uploading images:", err);
-      alert("Failed to upload images");
     }
   };
 
@@ -269,12 +280,11 @@ export default function PropertiesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {properties.map((p) => (
             <div key={p.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative">
-              {/* Image Upload Button */}
               <div className="relative">
                 <div className={`h-48 ${placeholderColor(p.property_type)} flex items-center justify-center relative`}>
                   {p.images && p.images.length > 0 ? (
-                    <img 
-                      src={`http://127.0.0.1:8000${p.images[0].image}`} 
+                    <img
+                      src={`http://127.0.0.1:8000${p.images[0].image}`}
                       alt={p.name}
                       className="w-full h-full object-cover"
                     />
@@ -283,11 +293,11 @@ export default function PropertiesPage() {
                   )}
                   <label className="absolute bottom-2 right-2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full cursor-pointer transition-all">
                     <ImageIcon size={16} />
-                    <input 
-                      type="file" 
-                      multiple 
+                    <input
+                      type="file"
+                      multiple
                       accept="image/*"
-                      className="hidden" 
+                      className="hidden"
                       onChange={(e) => e.target.files && handleImageUpload(p.id, e.target.files)}
                     />
                   </label>
@@ -296,12 +306,12 @@ export default function PropertiesPage() {
                   </span>
                 </div>
               </div>
-              
+
               <div className="p-5">
                 <div className="flex justify-between items-start mb-1">
                   <h3 className="font-bold text-gray-900 text-lg">{p.name}</h3>
                   <div className="relative">
-                    <button 
+                    <button
                       onClick={() => setShowMenu(showMenu === p.id ? null : p.id)}
                       className="text-gray-400 hover:text-gray-600"
                     >
@@ -325,11 +335,11 @@ export default function PropertiesPage() {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-1 text-gray-400 text-sm mb-3">
                   <MapPin size={13} /><span>{p.location}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 text-gray-500 text-sm">
                     <span className="flex items-center gap-1"><Bed size={14} /> {p.bedrooms} bed</span>
@@ -337,15 +347,23 @@ export default function PropertiesPage() {
                   </div>
                   <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">{p.property_type_display}</span>
                 </div>
-                
+
                 <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between items-center">
                   <div>
                     <p className="text-xs text-gray-400">Monthly Rent</p>
                     <p className="font-bold text-[#581c87]">{Number(p.monthly_rent).toLocaleString()} MAD</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs text-gray-400">Owner</p>
-                    <p className="text-sm font-semibold text-gray-700">{p.owner_name}</p>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <p className="text-xs text-gray-400">Owner</p>
+                      <p className="text-sm font-semibold text-gray-700">{p.owner_name}</p>
+                    </div>
+                    <button
+                      onClick={() => router.push(`/dashboard/properties/${p.id}`)}
+                      className="flex items-center gap-1 bg-[#581c87]/10 text-[#581c87] px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#581c87]/20 transition-all"
+                    >
+                      View
+                    </button>
                   </div>
                 </div>
               </div>
@@ -376,19 +394,22 @@ export default function PropertiesPage() {
               )}
 
               <div className="space-y-4">
+                {/* Property Name */}
                 <div>
                   <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Property Name *</label>
                   <input className={inputClass} placeholder="Riad Palais Medina" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
                 </div>
 
+                {/* Location */}
                 <div>
                   <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Location *</label>
                   <input className={inputClass} placeholder="Marrakech, Morocco" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} />
                 </div>
 
+                {/* Property Type */}
                 <div>
                   <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Property Type *</label>
-                  <select className={inputClass} value={form.property_type} onChange={e => setForm({ ...form, property_type: e.target.value })}>
+                  <select className={inputClass} value={form.property_type} onChange={e => setForm({ ...form, property_type: e.target.value, property_type_other: "" })}>
                     <option value="">Select type</option>
                     <option value="apartment">Apartment</option>
                     <option value="villa">Villa</option>
@@ -397,8 +418,18 @@ export default function PropertiesPage() {
                     <option value="commercial">Commercial</option>
                     <option value="other">Other</option>
                   </select>
+                  {/* ✅ ملي يختار Other كيطلع input */}
+                  {form.property_type === "other" && (
+                    <input
+                      className={`${inputClass} mt-2`}
+                      placeholder="Please specify property type..."
+                      value={form.property_type_other}
+                      onChange={e => setForm({ ...form, property_type_other: e.target.value })}
+                    />
+                  )}
                 </div>
 
+                {/* Bedrooms + Bathrooms */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Bedrooms</label>
@@ -410,6 +441,58 @@ export default function PropertiesPage() {
                   </div>
                 </div>
 
+                {/* Living Rooms + Dining Room */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Living Rooms</label>
+                    <input type="number" className={inputClass} placeholder="1" value={form.living_rooms} onChange={e => setForm({ ...form, living_rooms: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Dining Room</label>
+                    <input type="number" className={inputClass} placeholder="1" value={form.dining_room} onChange={e => setForm({ ...form, dining_room: e.target.value })} />
+                  </div>
+                </div>
+
+                {/* Kitchen Status */}
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Kitchen Status</label>
+                  <select className={inputClass} value={form.kitchen_status} onChange={e => setForm({ ...form, kitchen_status: e.target.value })}>
+                    <option value="">Select status</option>
+                    <option value="1">Full Kitchen</option>
+                    <option value="2">Semi Kitchen</option>
+                    <option value="3">No Kitchen</option>
+                  </select>
+                </div>
+
+                {/* Balcony + Garden */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Balcony / Terrace</label>
+                    <select className={inputClass} value={form.has_balcony} onChange={e => setForm({ ...form, has_balcony: e.target.value })}>
+                      <option value="no">None</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Garden</label>
+                    <select className={inputClass} value={form.has_garden} onChange={e => setForm({ ...form, has_garden: e.target.value })}>
+                      <option value="no">None</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Parking */}
+                <div>
+                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Parking</label>
+                  <select className={inputClass} value={form.parking_status} onChange={e => setForm({ ...form, parking_status: e.target.value })}>
+                    <option value="no">No Parking</option>
+                    <option value="private">Private Garage</option>
+                    <option value="street">On Street</option>
+                  </select>
+                </div>
+
+                {/* Area + Monthly Rent */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Area (m²)</label>
@@ -421,6 +504,7 @@ export default function PropertiesPage() {
                   </div>
                 </div>
 
+                {/* Owner */}
                 <div>
                   <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Owner *</label>
                   <select className={inputClass} value={form.owner} onChange={e => setForm({ ...form, owner: e.target.value })}>
@@ -431,6 +515,7 @@ export default function PropertiesPage() {
                   </select>
                 </div>
 
+                {/* Description */}
                 <div>
                   <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Description</label>
                   <textarea className={inputClass} rows={3} placeholder="Brief description..." value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
@@ -457,7 +542,7 @@ export default function PropertiesPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Modal */}
       {showDeleteModal && selectedProperty && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
