@@ -73,7 +73,7 @@ export default function OwnerDashboardPage() {
     }
   };
 
-  // --- حسابات الأرباح ---
+  
   const totalRevenue = financials.length > 0 
     ? financials.reduce((sum, f) => sum + Number(f.revenue), 0)
     : properties.reduce((sum, p) => sum + Number(p.monthly_rent), 0);
@@ -84,7 +84,7 @@ export default function OwnerDashboardPage() {
 
   const activeProperties = properties.filter(p => p.status === "available" || p.status === "rented").length;
 
-  // --- وظيفة تحميل التقرير PDF ---
+  
   const downloadPDFReport = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
@@ -105,7 +105,7 @@ export default function OwnerDashboardPage() {
     doc.save(`Report_${currentMonth}_${currentYear}.pdf`);
   };
 
-  // --- وظيفة الواتساب ---
+  
   const contactSupport = () => {
     const phoneNumber = "212600000000"; 
     const message = encodeURIComponent(`Hello Makani Support, I am an owner and I have a question regarding my dashboard for ${currentMonth}.`);
@@ -123,7 +123,7 @@ export default function OwnerDashboardPage() {
 
   return (
     <div className="p-8 bg-[#f9fafb] min-h-screen">
-      {/* Header الداخلي - خاص بالـ Dashboard فقط */}
+      
       <div className="flex justify-between items-start mb-8">
         <div>
           <div className="flex items-center gap-2 text-sm text-gray-400 mb-1">
@@ -153,7 +153,7 @@ export default function OwnerDashboardPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+     
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           <div className="flex justify-between items-start">
