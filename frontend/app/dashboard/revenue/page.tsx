@@ -1,52 +1,109 @@
 "use client";
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { DollarSign, ArrowUpRight, TrendingUp, Calendar } from 'lucide-react';
+import { financialService } from '@/lib/financialService'; // T-akdi blli had l-service kheddam
 
 export default function RevenuePage() {
+  const [revenueData, setRevenueData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch data mn l-backend
+    financialService.getRevenueStats()
+      .then(data => {
+        setRevenueData(data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="p-10 text-purple-500 font-mono animate-pulse">Loading Financial Data...</div>;
+
   return (
-    <div className="min-h-screen bg-[#0b0e14] text-white p-8">
-      <div className="flex justify-between items-center mb-10 text-white">
-        <h1 className="text-3xl font-extrabold tracking-tight border-l-8 border-purple-600 pl-4 uppercase">
-          Revenue <span className="text-purple-500">Management</span>
-        </h1>
-        <button className="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg font-medium transition shadow-[0_0_20px_rgba(147,51,234,0.3)] text-white">
-          + Add Transaction
-        </button>
+    <div className="p-8 bg-white min-h-screen">
+      {/* Header m-animy */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex justify-between items-center mb-8"
+      >
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">Revenue Overview</h1>
+          <p className="text-gray-500">Track your incoming cash flow and property earnings.</p>
+        </div>
+        <div className="flex gap-3">
+          <button className="px-4 py-2 bg-gray-100 rounded-xl text-sm font-medium hover:bg-gray-200 transition-all">
+            Download Report
+          </button>
+          <button className="px-4 py-2 bg-[#581c87] text-white rounded-xl text-sm font-medium shadow-lg hover:bg-purple-800 transition-all">
+            + Add Revenue
+          </button>
+        </div>
+      </motion.div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {[
+          { label: "Total Revenue", value: revenueData?.total || "0 MAD", icon: DollarSign, color: "text-green-600", bg: "bg-green-50" },
+          { label: "This Month", value: revenueData?.thisMonth || "0 MAD", icon: Calendar, color: "text-purple-600", bg: "bg-purple-50" },
+          { label: "Growth", value: "+12.5%", icon: TrendingUp, color: "text-blue-600", bg: "bg-blue-50" },
+        ].map((stat, i) => (
+          <motion.div 
+            key={i}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.1 }}
+            className="p-6 bg-white border border-gray-100 rounded-2xl shadow-sm"
+          >
+            <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-xl flex items-center justify-center mb-4`}>
+              <stat.icon size={24} />
+            </div>
+            <p className="text-sm text-gray-500 font-medium">{stat.label}</p>
+            <h3 className="text-2xl font-bold text-gray-800 mt-1">{stat.value}</h3>
+          </motion.div>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-        <div className="bg-[#161b22] p-6 rounded-2xl border border-gray-800 border-t-purple-500 border-t-4">
-          <p className="text-gray-400 text-xs uppercase mb-1">Total Revenue</p>
-          <p className="text-2xl font-bold text-green-400">0.00 MAD</p>
+      {/* List dyal l-Mu3amalat (Recent Transactions) */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden"
+      >
+        <div className="p-6 border-b border-gray-50">
+          <h2 className="text-lg font-bold text-gray-800">Recent Revenue</h2>
         </div>
-        <div className="bg-[#161b22] p-6 rounded-2xl border border-gray-800">
-          <p className="text-gray-400 text-xs uppercase mb-1">Commission</p>
-          <p className="text-2xl font-bold text-purple-400">0.00 MAD</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-bold">
+              <tr>
+                <th className="px-6 py-4">Property</th>
+                <th className="px-6 py-4">Owner</th>
+                <th className="px-6 py-4">Amount</th>
+                <th className="px-6 py-4">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {revenueData?.transactions?.length > 0 ? revenueData.transactions.map((t: any, i: number) => (
+                <tr key={i} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 font-medium text-gray-800">{t.property}</td>
+                  <td className="px-6 py-4 text-gray-600">{t.owner}</td>
+                  <td className="px-6 py-4 font-bold text-green-600">{t.amount} MAD</td>
+                  <td className="px-6 py-4">
+                    <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">PAID</span>
+                  </td>
+                </tr>
+              )) : (
+                <tr>
+                  <td colSpan={4} className="px-6 py-10 text-center text-gray-400">No revenue records found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-        <div className="bg-[#161b22] p-6 rounded-2xl border border-gray-800">
-          <p className="text-gray-400 text-xs uppercase mb-1">Owner Net</p>
-          <p className="text-2xl font-bold text-blue-400">0.00 MAD</p>
-        </div>
-      </div>
-
-      <div className="bg-[#161b22] rounded-2xl border border-gray-800 overflow-hidden shadow-2xl">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-[#21262d] text-gray-400 uppercase text-xs">
-            <tr>
-              <th className="px-6 py-4">Property</th>
-              <th className="px-6 py-4">Revenue</th>
-              <th className="px-6 py-4">Expenses</th>
-              <th className="px-6 py-4">Net Payout</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-800">
-            <tr>
-              <td className="px-6 py-10 text-center text-gray-500 font-medium" colSpan={4}>
-                Ready to sync with Backend.
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      </motion.div>
     </div>
   );
 }
