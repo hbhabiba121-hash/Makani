@@ -1,10 +1,12 @@
+# urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     LoginView, LogoutView, ProfileView, ChangePasswordView,
     ForgotPasswordView, ResetPasswordView, UserViewSet,
-    CreateUserByAgencyAdminView, AgencyUsersListView
+    CreateUserByAgencyAdminView, AgencyUsersListView,
+    CreateStaffView, StaffListView, StaffDetailView, StaffDeleteView
 )
 
 router = DefaultRouter()
@@ -30,4 +32,10 @@ urlpatterns = [
     # Agency user management
     path('agency/create-user/', CreateUserByAgencyAdminView.as_view(), name='create_user_by_agency'),
     path('agency/users/', AgencyUsersListView.as_view(), name='agency_users'),
+
+    # Staff CRUD endpoints
+    path("staff/", StaffListView.as_view(), name='staff-list'),
+    path("staff/create/", CreateStaffView.as_view(), name='staff-create'),
+    path("staff/<int:pk>/", StaffDetailView.as_view(), name='staff-detail'),
+    path("staff/<int:pk>/delete/", StaffDeleteView.as_view(), name='staff-delete'),
 ]

@@ -1,3 +1,4 @@
+# owners/serializers.py
 from rest_framework import serializers
 from .models import Owner
 from users.serializers import UserSerializer
@@ -47,14 +48,17 @@ class CreateOwnerSerializer(serializers.ModelSerializer):
         
         temp_password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
         
+        # Create user WITHOUT agency first (agency will be set in the view)
         user = User.objects.create_user(
             email=email,
             password=temp_password,
             first_name=first_name,
             last_name=last_name,
-            role='owner'
+            role='owner',
+            agency=None
         )
         
+        # Create owner
         owner = Owner.objects.create(user=user, **validated_data)
         
         return {
@@ -66,34 +70,3 @@ class CreateOwnerSerializer(serializers.ModelSerializer):
             'address': validated_data.get('address', ''),
             'temp_password': temp_password
         }
-
-
-# Add this serializer for updates
-class UpdateOwnerSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(write_only=True, required=False)
-    last_name = serializers.CharField(write_only=True, required=False)
-    email = serializers.EmailField(write_only=True, required=False)
-    
-    class Meta:
-        model = Owner
-        fields = ['first_name', 'last_name', 'email', 'phone', 'address']
-    
-    def update(self, instance, validated_data):
-        from users.models import User
-        
-        # Update user fields
-        user = instance.user
-        if 'first_name' in validated_data:
-            user.first_name = validated_data.pop('first_name')
-        if 'last_name' in validated_data:
-            user.last_name = validated_data.pop('last_name')
-        if 'email' in validated_data:
-            user.email = validated_data.pop('email')
-        user.save()
-        
-        # Update owner fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        
-        return instance

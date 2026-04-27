@@ -1,14 +1,10 @@
-
-
 from django.db import models
 from users.models import User
 
 class Owner(models.Model):
-
-    
     user = models.OneToOneField(
         User, 
-        on_delete=models.CASCADE, 
+        on_delete=models.CASCADE,  # This is KEY: when User is deleted, Owner is auto-deleted
         related_name='owner_profile'
     )
     phone = models.CharField(max_length=20, blank=True)
@@ -17,7 +13,6 @@ class Owner(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        """Returns full name for display - explicit and readable"""
         return f"{self.user.first_name} {self.user.last_name}"
     
     class Meta:

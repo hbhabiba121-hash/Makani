@@ -1,4 +1,6 @@
-        # Add these imports at the top
+# views.py - FULLY CORRECTED VERSION
+
+# Add these imports at the top
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from .models import User
@@ -408,3 +410,188 @@ class AgencyUsersListView(APIView):
         
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data)
+
+
+# ===================== STAFF CRUD VIEWS =====================
+
+class CreateStaffView(APIView):
+    """Create a new staff member under the same agency"""
+    
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        # Check if user has an agency
+        if not user.agency:
+            return Response(
+                {"error": "No agency linked to your account"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if user has permission (admin or staff can create staff)
+        if user.role not in ["admin", "staff"]:
+            return Response(
+                {"error": "You don't have permission to create staff members"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get data from request
+        email = request.data.get("email")
+        first_name = request.data.get("first_name")
+        last_name = request.data.get("last_name")
+
+        # Validate required fields
+        if not all([email, first_name, last_name]):
+            return Response(
+                {"error": "Email, first name, and last name are required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if email already exists
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {"error": "A user with this email already exists"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Generate random temporary password
+        temp_password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+
+        # Create the staff user
+        try:
+            staff = User.objects.create_user(
+                email=email,
+                password=temp_password,
+                first_name=first_name,
+                last_name=last_name,
+                role="staff",
+                agency=user.agency
+            )
+
+            return Response({
+                "message": "Staff member created successfully",
+                "user": UserSerializer(staff).data,
+                "temp_password": temp_password  # Send temp password to frontend
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to create staff member: {str(e)}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class StaffListView(APIView):
+    """List all staff members in the same agency"""
+    
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        # Check if user has an agency
+        if not user.agency:
+            return Response(
+                [],  # Return empty list instead of error
+                status=status.HTTP_200_OK
+            )
+
+        # Get all staff members in the same agency
+        staff_members = User.objects.filter(
+            agency=user.agency,
+            role="staff"
+        ).order_by('first_name', 'last_name')
+
+        serializer = UserSerializer(staff_members, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class StaffDetailView(APIView):
+    """Update a specific staff member's details"""
+    
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        user = request.user
+
+        # Check if user has an agency
+        if not user.agency:
+            return Response(
+                {"error": "No agency linked to your account"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Find the staff member (must be in same agency and role='staff')
+        try:
+            staff = User.objects.get(pk=pk, role="staff", agency=user.agency)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Staff member not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Update fields (only if provided in request)
+        if 'first_name' in request.data:
+            staff.first_name = request.data['first_name']
+        
+        if 'last_name' in request.data:
+            staff.last_name = request.data['last_name']
+        
+        if 'email' in request.data:
+            # Check if new email is already taken by another user
+            new_email = request.data['email']
+            if User.objects.exclude(pk=pk).filter(email=new_email).exists():
+                return Response(
+                    {"error": "A user with this email already exists"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            staff.email = new_email
+
+        # Save the updated staff member
+        staff.save()
+
+        return Response(
+            UserSerializer(staff).data, 
+            status=status.HTTP_200_OK
+        )
+
+
+class StaffDeleteView(APIView):
+    """Delete a specific staff member"""
+    
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, pk):
+        user = request.user
+
+        # Check if user has an agency
+        if not user.agency:
+            return Response(
+                {"error": "No agency linked to your account"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Find the staff member (must be in same agency and role='staff')
+        try:
+            staff = User.objects.get(pk=pk, role="staff", agency=user.agency)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Staff member not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Don't allow deleting yourself
+        if staff.id == user.id:
+            return Response(
+                {"error": "You cannot delete your own account"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Delete the staff member
+        staff.delete()
+
+        return Response(
+            {"message": "Staff member deleted successfully"}, 
+            status=status.HTTP_200_OK
+        )
