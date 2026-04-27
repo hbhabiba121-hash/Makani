@@ -1,11 +1,8 @@
-
-
 from django.db import models
 from agencies.models import Agency
 from owners.models import Owner
 
 class Property(models.Model):
-
     
     class PropertyType(models.TextChoices):
         APARTMENT = 'apartment', 'Apartment'
@@ -21,11 +18,13 @@ class Property(models.Model):
         MAINTENANCE = 'maintenance', 'Under Maintenance'
         PENDING = 'pending', 'Pending'
     
-    # Relationships
+    # Relationships (only define once!)
     agency = models.ForeignKey(
         Agency, 
         on_delete=models.CASCADE, 
-        related_name='properties'
+        related_name='properties',
+        null=True,  # Add this
+        blank=True
     )
     owner = models.ForeignKey(
         Owner, 
@@ -64,7 +63,6 @@ class Property(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        """Clear string representation - follows naming conventions"""
         return f"{self.name} — {self.agency.name}"
     
     class Meta:
