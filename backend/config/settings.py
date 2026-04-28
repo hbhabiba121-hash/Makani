@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
 
@@ -164,3 +165,6 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
