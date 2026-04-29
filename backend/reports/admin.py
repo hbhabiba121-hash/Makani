@@ -5,18 +5,24 @@ from .models import Report
 
 @admin.register(Report)
 class ReportAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'report_type', 'month', 'year', 'created_at', 'total_revenue']
-    list_filter = ['report_type', 'year', 'created_at']
+    list_display = ['id', 'name', 'report_type', 'report_scope', 'year', 'created_at']
+    list_filter = ['report_type', 'report_scope', 'year', 'created_at']
     search_fields = ['name']
     readonly_fields = ['created_at']
+    
     fieldsets = (
         ('Report Information', {
-            'fields': ('name', 'report_type', 'property', 'month', 'year')
+            'fields': ('name', 'report_type', 'report_scope', 'property', 'month', 'year')
         }),
-        ('Financial Data', {
-            'fields': ('total_revenue', 'total_expenses', 'net_profit', 'property_count')
+        ('Agency Financial Data', {
+            'fields': ('agency_total_commission', 'agency_total_expenses', 'agency_net_profit'),
+            'classes': ('collapse',)
         }),
-        ('File Information', {
-            'fields': ('file', 'created_at')
+        ('Owner Financial Data', {
+            'fields': ('owner_total_revenue', 'owner_total_commission', 'owner_total_expenses', 'owner_net_profit'),
+            'classes': ('collapse',)
+        }),
+        ('Additional', {
+            'fields': ('property_count', 'details', 'created_at')
         }),
     )

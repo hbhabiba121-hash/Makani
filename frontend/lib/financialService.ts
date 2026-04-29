@@ -15,7 +15,9 @@ export interface RevenueRecord {
   property: string;
   property_id: number;
   guest: string;
+  guest_name?: string;
   source: string;
+  booking_source?: string;
   date: string;
   check_in?: string;
   check_out?: string;
@@ -24,10 +26,9 @@ export interface RevenueRecord {
   price_per_night?: number;
   expenses: number;
   commission: number;
+  commission_rate?: number;
   net_profit: number;
   status: string;
-  booking_source?: string;
-  guest_name?: string;
 }
 
 export interface RevenueStats {

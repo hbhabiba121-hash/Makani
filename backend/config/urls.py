@@ -1,5 +1,3 @@
-# backend/config/urls.py - FIXED WITH MEDIA FILES
-
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -14,7 +12,9 @@ urlpatterns = [
     path('api/', include('owners.urls')),
     path('api/', include('properties.urls')),
     path('financials/', include('financials.urls')),
-    path('reports/', include('reports.urls')),  # MAKE SURE THIS LINE EXISTS
+    path('api/financials/', include('financials.urls')),  # ADD THIS - supports both paths
+    path('reports/', include('reports.urls')),
+    path('api/reports/', include('reports.urls')),  # ADD THIS - supports both paths
     path('api-auth/', include('rest_framework.urls')),
 ]
 

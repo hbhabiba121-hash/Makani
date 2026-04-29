@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { Loader2, Download, Calendar, Building2, DollarSign, FileText, TrendingUp, Plus, Trash2, Filter } from "lucide-react";
+import React, { useEffect, useState, useCallback } from 'react';
+import { Loader2, Download, Calendar, Building2, DollarSign, FileText, TrendingUp, Plus, Trash2, Eye, X, ChevronDown, ChevronUp, Receipt } from "lucide-react";
 import api from "@/lib/axios";
 
 interface Report {
   id: number;
   name: string;
   report_type: string;
+  report_scope?: string;
   month: number | null;
   year: number;
   property_id: number | null;
@@ -16,14 +17,81 @@ interface Report {
   total_expenses: number;
   total_commission: number;
   net_profit: number;
+  owner_payout?: number;
   property_count: number;
   created_at: string;
-  details?: any;
+  summary?: {
+    total_revenue: number;
+    total_expenses: number;
+    total_commission: number;
+    net_profit: number;
+  };
+  details?: {
+    properties?: PropertyDetail[];
+    summary?: {
+      total_bookings: number;
+      total_expense_items: number;
+      average_revenue_per_property: number;
+    };
+    monthly_breakdown?: MonthlyBreakdown[];
+  };
+}
+
+interface PropertyDetail {
+  id: number;
+  name: string;
+  location: string;
+  total_revenue: number;
+  total_expenses: number;
+  total_commission: number;
+  net_profit: number;
+  bookings?: Booking[];
+  expenses?: ExpenseDetail[];
+  booking_count: number;
+  expense_count: number;
+}
+
+interface Booking {
+  guest_name: string;
+  booking_source: string;
+  check_in: string;
+  check_out: string;
+  nights: number;
+  price_per_night: number;
+  revenue: number;
+  commission: number;
+}
+
+interface ExpenseDetail {
+  category: string;
+  description: string;
+  date: string;
+  amount: number;
+  receipt_url?: string;
+}
+
+interface MonthlyBreakdown {
+  month: number;
+  month_name: string;
+  revenue: number;
+  expenses: number;
+  commission: number;
+  net_profit: number;
 }
 
 interface Property {
   id: number;
   name: string;
+  location: string;
+  price_per_night?: number;
+}
+
+interface ReportPayload {
+  report_type: string;
+  report_scope?: string;
+  year: number;
+  month?: number;
+  property_id?: string;
 }
 
 export default function ReportsPage() {
@@ -31,7 +99,18 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [expandedProperties, setExpandedProperties] = useState<Set<number>>(new Set());
+  
+  // Generate form states
+  const [reportTypeChoice, setReportTypeChoice] = useState<"agency" | "owner">("agency");
+  const [reportScope, setReportScope] = useState<"agency" | "single">("agency");
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
+  const [reportPeriod, setReportPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -41,22 +120,10 @@ export default function ReportsPage() {
     year: new Date().getFullYear().toString()
   });
   
-  // Generate form states
-  const [selectedProperty, setSelectedProperty] = useState("");
-  const [reportType, setReportType] = useState("monthly");
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  
   // Delete states
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<number | null>(null);
-  
-  const [stats, setStats] = useState({
-    totalReports: 0,
-    totalRevenue: 0,
-    totalProfit: 0
-  });
 
   const months = [
     { value: 1, label: 'January' },
@@ -80,12 +147,7 @@ export default function ReportsPage() {
     { value: 'yearly', label: 'Yearly' }
   ];
 
-  useEffect(() => {
-    fetchReports();
-    fetchProperties();
-  }, [filters]);
-
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -98,62 +160,87 @@ export default function ReportsPage() {
       const data = response.data;
       
       setReports(data.reports || []);
-      
-      // Calculate stats
-      const totalReports = data.reports?.length || 0;
-      const totalRevenue = data.reports?.reduce((sum: number, r: Report) => sum + r.total_revenue, 0) || 0;
-      const totalProfit = data.reports?.reduce((sum: number, r: Report) => sum + r.net_profit, 0) || 0;
-      
-      setStats({
-        totalReports,
-        totalRevenue,
-        totalProfit
-      });
     } catch (err) {
       console.error("Error fetching reports:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
-  const fetchProperties = async () => {
+  const fetchProperties = useCallback(async () => {
     try {
-      const response = await api.get('/financials/properties/');
-      setProperties(response.data);
+      const response = await api.get('/api/properties/');
+      const data = Array.isArray(response.data) ? response.data : response.data.results || [];
+      setProperties(data);
     } catch (err) {
       console.error("Error fetching properties:", err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchReports();
+    fetchProperties();
+  }, [fetchReports, fetchProperties]);
 
   const handleGenerateReport = async () => {
     setGenerating(true);
     try {
-      const payload: any = {
-        report_type: reportType,
+      const payload: ReportPayload = {
+        report_type: reportPeriod,
+        report_scope: reportTypeChoice,
         year: selectedYear
       };
       
-      if (reportType === 'monthly') {
+      if (reportPeriod === 'monthly') {
         payload.month = selectedMonth;
       }
       
-      if (selectedProperty && selectedProperty !== 'all') {
-        payload.property_id = selectedProperty;
+      if (reportScope === 'single' && selectedPropertyId) {
+        payload.property_id = selectedPropertyId;
+      } else if (reportScope === 'agency') {
+        payload.property_id = 'all';
       }
       
       const response = await api.post('/reports/reports/generate/', payload);
       
-      if (response.status === 201) {
-        alert(`Report generated successfully!`);
+      if (response.status === 200 || response.status === 201) {
+        alert('Report generated successfully!');
         fetchReports();
+        setShowGenerateModal(false);
+        resetGenerateForm();
       }
-      
-      setShowGenerateModal(false);
     } catch (err: any) {
       console.error("Error generating report:", err);
       alert(err.response?.data?.error || "Failed to generate report");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const resetGenerateForm = () => {
+    setReportTypeChoice("agency");
+    setReportScope("agency");
+    setSelectedPropertyId("");
+    setReportPeriod("monthly");
+    setSelectedMonth(new Date().getMonth() + 1);
+    setSelectedYear(new Date().getFullYear());
+  };
+
+  const handleViewReport = async (report: Report) => {
+    try {
+      const response = await api.get(`/reports/reports/${report.id}/`);
+      const data = response.data;
+      setSelectedReport({
+        ...data,
+        total_revenue: data.summary?.total_revenue || data.total_revenue || 0,
+        total_expenses: data.summary?.total_expenses || data.total_expenses || 0,
+        total_commission: data.summary?.total_commission || data.total_commission || 0,
+        net_profit: data.summary?.net_profit || data.net_profit || 0,
+      });
+      setShowViewModal(true);
+    } catch (err) {
+      console.error("Error fetching report details:", err);
+      alert("Failed to load report details");
     }
   };
 
@@ -192,6 +279,12 @@ export default function ReportsPage() {
     }
   };
 
+  const handleViewReceipt = (receiptUrl: string) => {
+    if (receiptUrl) {
+      window.open(receiptUrl, '_blank');
+    }
+  };
+
   const handleFilterChange = (key: string, value: string) => {
     setFilters({ ...filters, [key]: value });
   };
@@ -205,6 +298,16 @@ export default function ReportsPage() {
     });
   };
 
+  const togglePropertyExpand = (propertyId: number) => {
+    const newExpanded = new Set(expandedProperties);
+    if (newExpanded.has(propertyId)) {
+      newExpanded.delete(propertyId);
+    } else {
+      newExpanded.add(propertyId);
+    }
+    setExpandedProperties(newExpanded);
+  };
+
   if (loading) {
     return (
       <div className="h-[60vh] flex items-center justify-center">
@@ -215,11 +318,11 @@ export default function ReportsPage() {
 
   return (
     <div className="p-6 bg-[#f8fafc] min-h-screen">
-      {/* Header with Generate Button */}
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Reports</h1>
-          <p className="text-sm text-gray-500 mt-1">Generate and manage financial reports by property, month, or year</p>
+          <h1 className="text-2xl font-bold text-gray-800">Financial Reports</h1>
+          <p className="text-sm text-gray-500 mt-1">Generate and manage financial reports by property or agency-wide</p>
         </div>
         <button 
           onClick={() => setShowGenerateModal(true)}
@@ -230,47 +333,20 @@ export default function ReportsPage() {
         </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mb-3">
-            <FileText size={20} className="text-blue-600" />
-          </div>
-          <p className="text-xs text-gray-500 font-medium">Total Reports</p>
-          <h3 className="text-2xl font-bold text-gray-900 mt-1">{stats.totalReports}</h3>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mb-3">
-            <DollarSign size={20} className="text-green-600" />
-          </div>
-          <p className="text-xs text-gray-500 font-medium">Total Revenue</p>
-          <h3 className="text-2xl font-bold text-green-600 mt-1">{stats.totalRevenue.toLocaleString()} DH</h3>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
-          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center mb-3">
-            <TrendingUp size={20} className="text-purple-600" />
-          </div>
-          <p className="text-xs text-gray-500 font-medium">Total Profit</p>
-          <h3 className="text-2xl font-bold text-purple-600 mt-1">{stats.totalProfit.toLocaleString()} DH</h3>
-        </div>
-      </div>
-
       {/* Filters Bar */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex-1 min-w-[150px]">
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Property</label>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Scope</label>
             <select
               value={filters.property_id}
               onChange={(e) => handleFilterChange('property_id', e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
             >
-              <option value="">All Properties</option>
-              <option value="all">All Properties (Combined)</option>
+              <option value="">All Reports</option>
+              <option value="all">Agency Reports (All Properties)</option>
               {properties.map(prop => (
-                <option key={prop.id} value={prop.id}>{prop.name}</option>
+                <option key={prop.id} value={prop.id}>{prop.name} (Single Property)</option>
               ))}
             </select>
           </div>
@@ -348,21 +424,31 @@ export default function ReportsPage() {
                     <span className="flex items-center gap-1">
                       <FileText size={14} /> {report.report_type === 'monthly' ? 'Monthly' : 'Yearly'}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <DollarSign size={14} /> Revenue: {report.total_revenue.toLocaleString()} DH
+                    <span className="flex items-center gap-1 text-green-600">
+                      Revenue: {(report.total_revenue || 0).toLocaleString()} DH
                     </span>
                     <span className="flex items-center gap-1 text-red-500">
-                      Expenses: {report.total_expenses.toLocaleString()} DH
+                      Expenses: {(report.total_expenses || 0).toLocaleString()} DH
                     </span>
-                    <span className="flex items-center gap-1 text-green-600">
-                      Profit: {report.net_profit.toLocaleString()} DH
+                    <span className="flex items-center gap-1 text-[#581c87]">
+                      Commission: {(report.total_commission || 0).toLocaleString()} DH
+                    </span>
+                    <span className="flex items-center gap-1 text-purple-600 font-semibold">
+                      Profit: {(report.net_profit || 0).toLocaleString()} DH
                     </span>
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <button 
+                    onClick={() => handleViewReport(report)}
+                    className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-all"
+                  >
+                    <Eye size={14} />
+                    View
+                  </button>
+                  <button 
                     onClick={() => handleDownloadReport(report.id)}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#581c87] text-white rounded-lg text-sm font-medium hover:bg-[#4c1d95] transition-all"
+                    className="flex items-center gap-2 px-3 py-2 bg-[#581c87] text-white rounded-lg text-sm font-medium hover:bg-[#4c1d95] transition-all"
                   >
                     <Download size={14} />
                     Download
@@ -372,7 +458,7 @@ export default function ReportsPage() {
                       setReportToDelete(report.id);
                       setShowDeleteConfirm(true);
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-all"
+                    className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-all"
                   >
                     <Trash2 size={14} />
                     Delete
@@ -387,6 +473,427 @@ export default function ReportsPage() {
           )}
         </div>
       </div>
+
+      {/* Generate Report Modal */}
+      {showGenerateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Generate Financial Report</h2>
+                <p className="text-sm text-gray-500">Create a new financial report</p>
+              </div>
+              <button onClick={() => { setShowGenerateModal(false); resetGenerateForm(); }} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* SECTION 1: REPORT TYPE */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">1. Report Type (Select One)</label>
+                <div className="space-y-3">
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${reportTypeChoice === 'agency' ? 'border-[#581c87] bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="reportType"
+                      value="agency"
+                      checked={reportTypeChoice === 'agency'}
+                      onChange={() => setReportTypeChoice("agency")}
+                      className="w-4 h-4 text-[#581c87]"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-gray-900">🏢 Agency Report</span>
+                      <p className="text-xs text-gray-500 mt-0.5">Shows agency performance: Commission - Expenses = Agency Net Profit</p>
+                    </div>
+                  </label>
+                  
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${reportTypeChoice === 'owner' ? 'border-[#581c87] bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="reportType"
+                      value="owner"
+                      checked={reportTypeChoice === 'owner'}
+                      onChange={() => setReportTypeChoice("owner")}
+                      className="w-4 h-4 text-[#581c87]"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-gray-900">🏠 Owner Report</span>
+                      <p className="text-xs text-gray-500 mt-0.5">Shows property owner performance: Revenue - Commission - Expenses = Owner Net Profit</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* SECTION 2: SCOPE */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">2. Report Scope (Select One)</label>
+                <div className="space-y-3">
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${reportScope === 'agency' ? 'border-[#581c87] bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="scope"
+                      value="agency"
+                      checked={reportScope === 'agency'}
+                      onChange={() => setReportScope("agency")}
+                      className="w-4 h-4 text-[#581c87]"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-gray-900">All Properties</span>
+                      <p className="text-xs text-gray-500 mt-0.5">Includes all properties combined with breakdown per property</p>
+                    </div>
+                  </label>
+                  
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${reportScope === 'single' ? 'border-[#581c87] bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="scope"
+                      value="single"
+                      checked={reportScope === 'single'}
+                      onChange={() => setReportScope("single")}
+                      className="w-4 h-4 text-[#581c87]"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-gray-900">Single Property</span>
+                      <p className="text-xs text-gray-500 mt-0.5">Focus on one specific property only</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Property Selection */}
+              {reportScope === 'single' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Select Property</label>
+                  <select
+                    value={selectedPropertyId}
+                    onChange={(e) => setSelectedPropertyId(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
+                  >
+                    <option value="">-- Select a property --</option>
+                    {properties.map(prop => (
+                      <option key={prop.id} value={prop.id}>{prop.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* SECTION 3: TIME PERIOD */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">3. Time Period (Select One)</label>
+                <div className="space-y-3">
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${reportPeriod === 'monthly' ? 'border-[#581c87] bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="period"
+                      value="monthly"
+                      checked={reportPeriod === 'monthly'}
+                      onChange={() => setReportPeriod("monthly")}
+                      className="w-4 h-4 text-[#581c87]"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-gray-900">Monthly Report</span>
+                      <p className="text-xs text-gray-500 mt-0.5">Financial summary for a specific month</p>
+                    </div>
+                  </label>
+                  
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${reportPeriod === 'yearly' ? 'border-[#581c87] bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="period"
+                      value="yearly"
+                      checked={reportPeriod === 'yearly'}
+                      onChange={() => setReportPeriod("yearly")}
+                      className="w-4 h-4 text-[#581c87]"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-gray-900">Yearly Report</span>
+                      <p className="text-xs text-gray-500 mt-0.5">Financial summary with monthly breakdown</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Date Selection */}
+              {reportPeriod === 'monthly' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Month</label>
+                    <select
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
+                    >
+                      {months.map(month => (
+                        <option key={month.value} value={month.value}>{month.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Year</label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
+                    >
+                      {years.map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {reportPeriod === 'yearly' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Year</label>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
+                  >
+                    {years.map(year => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Validation Message */}
+              {reportScope === 'single' && !selectedPropertyId && (
+                <div className="bg-yellow-50 rounded-xl p-3 text-sm text-yellow-700">
+                  Please select a property for single property report
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex gap-3 sticky bottom-0 bg-white">
+              <button
+                onClick={() => { setShowGenerateModal(false); resetGenerateForm(); }}
+                className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateReport}
+                disabled={generating || (reportScope === 'single' && !selectedPropertyId)}
+                className="flex-1 px-4 py-2 rounded-lg bg-[#581c87] text-white hover:bg-[#4c1d95] transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {generating && <Loader2 size={16} className="animate-spin" />}
+                {generating ? "Generating..." : "Generate Report"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Report Modal */}
+      {showViewModal && selectedReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center sticky top-0 bg-white">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">{selectedReport.name}</h2>
+                <p className="text-sm text-gray-500">Generated on {selectedReport.created_at}</p>
+              </div>
+              <button onClick={() => setShowViewModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-green-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500">Total Revenue</p>
+                  <p className="text-lg font-bold text-green-600">
+                    {(selectedReport.total_revenue || 0).toLocaleString()} DH
+                  </p>
+                </div>
+                <div className="bg-red-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500">Total Expenses</p>
+                  <p className="text-lg font-bold text-red-600">
+                    {(selectedReport.total_expenses || 0).toLocaleString()} DH
+                  </p>
+                </div>
+                <div className="bg-orange-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500">Commission</p>
+                  <p className="text-lg font-bold text-orange-600">
+                    {(selectedReport.total_commission || 0).toLocaleString()} DH
+                  </p>
+                </div>
+                <div className="bg-purple-50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-gray-500">Net Profit</p>
+                  <p className="text-lg font-bold text-purple-600">
+                    {(selectedReport.net_profit || 0).toLocaleString()} DH
+                  </p>
+                </div>
+              </div>
+
+              {/* Property Breakdown */}
+              {selectedReport.details?.properties && selectedReport.details.properties.length > 0 && (
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-3">📊 Property Breakdown</h3>
+                  <div className="space-y-3">
+                    {selectedReport.details.properties.map((prop) => (
+                      <div key={prop.id} className="border border-gray-200 rounded-xl overflow-hidden">
+                        <button
+                          onClick={() => togglePropertyExpand(prop.id)}
+                          className="w-full p-4 flex justify-between items-center hover:bg-gray-50 transition-colors text-left"
+                        >
+                          <div>
+                            <h4 className="font-semibold text-gray-900">{prop.name}</h4>
+                            <p className="text-xs text-gray-500">{prop.location}</p>
+                          </div>
+                          <div className="flex items-center gap-6 text-sm">
+                            <span className="text-green-600">{prop.total_revenue.toLocaleString()} DH</span>
+                            <span className="text-red-500">{prop.total_expenses.toLocaleString()} DH</span>
+                            <span className="text-purple-600 font-semibold">{prop.net_profit.toLocaleString()} DH</span>
+                            {expandedProperties.has(prop.id) ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                          </div>
+                        </button>
+                        
+                        {expandedProperties.has(prop.id) && (
+                          <div className="p-4 bg-gray-50 border-t border-gray-200 space-y-4">
+                            {/* Bookings */}
+                            {prop.bookings && prop.bookings.length > 0 && (
+                              <div>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-2">📅 Bookings</h5>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-xs">
+                                    <thead className="bg-gray-100">
+                                      <tr>
+                                        <th className="px-2 py-1 text-left">Guest</th>
+                                        <th className="px-2 py-1 text-left">Source</th>
+                                        <th className="px-2 py-1 text-left">Dates</th>
+                                        <th className="px-2 py-1 text-right">Nights</th>
+                                        <th className="px-2 py-1 text-right">Revenue</th>
+                                        <th className="px-2 py-1 text-right">Commission</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {prop.bookings.map((booking, idx) => (
+                                        <tr key={idx} className="border-b border-gray-200">
+                                          <td className="px-2 py-1">{booking.guest_name}</td>
+                                          <td className="px-2 py-1">{booking.booking_source}</td>
+                                          <td className="px-2 py-1 whitespace-nowrap">{booking.check_in} → {booking.check_out}</td>
+                                          <td className="px-2 py-1 text-right">{booking.nights}</td>
+                                          <td className="px-2 py-1 text-right">{booking.revenue.toLocaleString()} DH</td>
+                                          <td className="px-2 py-1 text-right">{booking.commission.toLocaleString()} DH</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Expenses with Receipts */}
+                            {prop.expenses && prop.expenses.length > 0 && (
+                              <div>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-2">💰 Expenses</h5>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-xs">
+                                    <thead className="bg-gray-100">
+                                      <tr>
+                                        <th className="px-2 py-1 text-left">Category</th>
+                                        <th className="px-2 py-1 text-left">Description</th>
+                                        <th className="px-2 py-1 text-left">Date</th>
+                                        <th className="px-2 py-1 text-right">Amount</th>
+                                        <th className="px-2 py-1 text-center">Receipt</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {prop.expenses.map((expense, idx) => (
+                                        <tr key={idx} className="border-b border-gray-200">
+                                          <td className="px-2 py-1">{expense.category}</td>
+                                          <td className="px-2 py-1">{expense.description || '-'}</td>
+                                          <td className="px-2 py-1">{expense.date}</td>
+                                          <td className="px-2 py-1 text-right text-red-600">{expense.amount.toLocaleString()} DH</td>
+                                          <td className="px-2 py-1 text-center">
+                                            {expense.receipt_url ? (
+                                              <button
+                                                onClick={() => handleViewReceipt(expense.receipt_url!)}
+                                                className="text-blue-600 hover:text-blue-800 flex items-center gap-1 mx-auto"
+                                              >
+                                                <Receipt size={12} />
+                                                <span className="text-xs">View</span>
+                                              </button>
+                                            ) : (
+                                              <span className="text-gray-400 text-xs">No receipt</span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Single Property Bookings List */}
+              {selectedReport.details?.properties && selectedReport.details.properties.length === 1 && (
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-3">📅 Booking List</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Guest</th>
+                          <th className="px-3 py-2 text-left">Source</th>
+                          <th className="px-3 py-2 text-left">Check-in</th>
+                          <th className="px-3 py-2 text-left">Check-out</th>
+                          <th className="px-3 py-2 text-right">Nights</th>
+                          <th className="px-3 py-2 text-right">Price/Night</th>
+                          <th className="px-3 py-2 text-right">Revenue</th>
+                          <th className="px-3 py-2 text-right">Commission</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedReport.details.properties[0]?.bookings?.map((booking, idx) => (
+                          <tr key={idx} className="border-b border-gray-100">
+                            <td className="px-3 py-2">{booking.guest_name}</td>
+                            <td className="px-3 py-2">{booking.booking_source}</td>
+                            <td className="px-3 py-2">{booking.check_in}</td>
+                            <td className="px-3 py-2">{booking.check_out}</td>
+                            <td className="px-3 py-2 text-right">{booking.nights}</td>
+                            <td className="px-3 py-2 text-right">{booking.price_per_night.toLocaleString()} DH</td>
+                            <td className="px-3 py-2 text-right text-green-600">{booking.revenue.toLocaleString()} DH</td>
+                            <td className="px-3 py-2 text-right text-purple-600">{booking.commission.toLocaleString()} DH</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+              <button
+                onClick={() => handleDownloadReport(selectedReport.id)}
+                className="flex-1 px-4 py-2 rounded-lg bg-[#581c87] text-white hover:bg-[#4c1d95] transition-all text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <Download size={16} />
+                Download PDF
+              </button>
+              <button
+                onClick={() => setShowViewModal(false)}
+                className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
@@ -411,129 +918,6 @@ export default function ReportsPage() {
               >
                 {deletingId === reportToDelete && <Loader2 size={16} className="animate-spin" />}
                 Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Generate Report Modal */}
-      {showGenerateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">Generate Report</h2>
-                <p className="text-sm text-gray-500">Create a new financial report</p>
-              </div>
-              <button onClick={() => setShowGenerateModal(false)} className="text-gray-400 hover:text-gray-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Property</label>
-                <select
-                  value={selectedProperty}
-                  onChange={(e) => setSelectedProperty(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
-                >
-                  <option value="">All Properties (Combined)</option>
-                  <option value="all">All Properties (Separate)</option>
-                  {properties.map(prop => (
-                    <option key={prop.id} value={prop.id}>{prop.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Report Type</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      value="monthly"
-                      checked={reportType === 'monthly'}
-                      onChange={(e) => setReportType(e.target.value)}
-                      className="w-4 h-4 text-[#581c87]"
-                    />
-                    <span className="text-sm">Monthly</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      value="yearly"
-                      checked={reportType === 'yearly'}
-                      onChange={(e) => setReportType(e.target.value)}
-                      className="w-4 h-4 text-[#581c87]"
-                    />
-                    <span className="text-sm">Yearly</span>
-                  </label>
-                </div>
-              </div>
-
-              {reportType === 'monthly' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Month</label>
-                    <select
-                      value={selectedMonth}
-                      onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
-                    >
-                      {months.map(month => (
-                        <option key={month.value} value={month.value}>{month.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Year</label>
-                    <select
-                      value={selectedYear}
-                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
-                    >
-                      {years.map(year => (
-                        <option key={year} value={year}>{year}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {reportType === 'yearly' && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Year</label>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
-                  >
-                    {years.map(year => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
-              <button
-                onClick={() => setShowGenerateModal(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerateReport}
-                disabled={generating}
-                className="flex-1 px-4 py-2 rounded-lg bg-[#581c87] text-white hover:bg-[#4c1d95] transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {generating && <Loader2 size={16} className="animate-spin" />}
-                {generating ? "Generating..." : "Generate Report"}
               </button>
             </div>
           </div>

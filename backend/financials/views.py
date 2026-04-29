@@ -1,5 +1,3 @@
-# backend/financials/views.py - COMPLETE FIXED VERSION
-
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -7,11 +5,33 @@ from django.db import transaction
 from django.db.models import Sum, Avg, Count, Q
 from django.shortcuts import get_object_or_404
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from .models import FinancialRecord
+from .models import FinancialRecord, Expense
 from properties.models import Property
-from .serializers import FinancialRecordSerializer
+from .serializers import FinancialRecordSerializer, ExpenseSerializer
+
+# Helper function to get month name
+def get_month_name(month_num):
+    months = ['January', 'February', 'March', 'April', 'May', 'June', 
+              'July', 'August', 'September', 'October', 'November', 'December']
+    return months[month_num - 1]
+
+# Helper functions
+def get_platform_from_property(property_name):
+    """Simulate platform based on property name"""
+    platforms = ['Airbnb', 'Booking.com', 'Vrbo', 'Direct']
+    index = hash(property_name) % len(platforms)
+    return platforms[index]
+
+def get_top_platform(properties):
+    """Calculate top platform based on property distribution"""
+    platforms = {'Airbnb': 0, 'Booking.com': 0, 'Vrbo': 0, 'Direct': 0}
+    for prop in properties:
+        platform = get_platform_from_property(prop.name)
+        platforms[platform] += 1
+    return max(platforms, key=platforms.get)
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -73,9 +93,7 @@ def monthly_summary(request, property_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def revenue_stats(request):
-    """
-    Get revenue statistics for dashboard
-    """
+    """Get revenue statistics for dashboard"""
     user = request.user
     
     # Get properties based on user role
@@ -97,10 +115,10 @@ def revenue_stats(request):
     total_bookings = financial_records.count()
     avg_per_booking = total_revenue / total_bookings if total_bookings > 0 else 0
     
-    # Get recent transactions (last 5 records)
+    # Get recent transactions
     recent_records = financial_records.order_by('-year', '-month')[:10]
     
-    # Transform to match frontend expected format - WITH ALL FIELDS
+    # Transform to match frontend expected format
     transactions = []
     for record in recent_records:
         transactions.append({
@@ -111,7 +129,7 @@ def revenue_stats(request):
             'guest_name': record.guest_name,
             'source': record.booking_source if record.booking_source else get_platform_from_property(record.property.name),
             'booking_source': record.booking_source,
-            'date': f"{record.get_month_display()} {record.year}",
+            'date': f"{get_month_name(record.month)} {record.year}",
             'check_in': record.check_in.strftime('%Y-%m-%d') if record.check_in else '',
             'check_out': record.check_out.strftime('%Y-%m-%d') if record.check_out else '',
             'nights': record.nights,
@@ -164,7 +182,6 @@ def revenue_records(request):
     
     revenue_list = []
     for record in records:
-        # Use direct database fields with ALL data for editing
         revenue_list.append({
             'id': record.id,
             'property': record.property.name,
@@ -173,7 +190,7 @@ def revenue_records(request):
             'guest_name': record.guest_name,
             'source': record.booking_source if record.booking_source else get_platform_from_property(record.property.name),
             'booking_source': record.booking_source,
-            'date': f"{record.get_month_display()} {record.year}",
+            'date': f"{get_month_name(record.month)} {record.year}",
             'check_in': record.check_in.strftime('%Y-%m-%d') if record.check_in else '',
             'check_out': record.check_out.strftime('%Y-%m-%d') if record.check_out else '',
             'nights': record.nights,
@@ -199,9 +216,7 @@ def revenue_records(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def revenue_summary(request):
-    """
-    Get revenue summary by month/year
-    """
+    """Get revenue summary by month/year"""
     user = request.user
     year = request.GET.get('year', datetime.now().year)
     
@@ -229,7 +244,7 @@ def revenue_summary(request):
         
         monthly_data.append({
             'month': month,
-            'month_name': FinancialRecord.Month(month).label,
+            'month_name': get_month_name(month),
             'revenue': float(total_revenue),
             'expenses': float(total_expenses),
             'commission': float(total_commission),
@@ -239,28 +254,10 @@ def revenue_summary(request):
     return Response(monthly_data)
 
 
-# Helper functions
-def get_platform_from_property(property_name):
-    """Simulate platform based on property name"""
-    platforms = ['Airbnb', 'Booking.com', 'Vrbo', 'Direct']
-    index = hash(property_name) % len(platforms)
-    return platforms[index]
-
-def get_top_platform(properties):
-    """Calculate top platform based on property distribution"""
-    platforms = {'Airbnb': 0, 'Booking.com': 0, 'Vrbo': 0, 'Direct': 0}
-    for prop in properties:
-        platform = get_platform_from_property(prop.name)
-        platforms[platform] += 1
-    return max(platforms, key=platforms.get)
-
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_properties(request):
-    """
-    Get all properties for the current user's agency
-    """
+    """Get all properties for the current user's agency"""
     user = request.user
     
     # Get properties based on user role
@@ -331,13 +328,10 @@ def create_financial_record(request):
         return Response({'error': str(e)}, status=500)
 
 
-# Single endpoint for GET, PUT, DELETE (Combined)
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def financial_record_detail(request, record_id):
-    """
-    Retrieve, update or delete a financial record
-    """
+    """Retrieve, update or delete a financial record"""
     try:
         record = FinancialRecord.objects.get(id=record_id)
     except FinancialRecord.DoesNotExist:
@@ -353,7 +347,6 @@ def financial_record_detail(request, record_id):
         return Response({'error': 'Permission denied'}, status=403)
     
     if request.method == 'GET':
-        # Return full record data for editing
         data = {
             'id': record.id,
             'property': record.property.name,
@@ -379,7 +372,6 @@ def financial_record_detail(request, record_id):
         try:
             property_obj = Property.objects.get(id=data.get("property_id", record.property.id))
             
-            # Update fields
             record.property = property_obj
             record.month = data.get("month", record.month)
             record.year = data.get("year", record.year)
@@ -406,12 +398,8 @@ def financial_record_detail(request, record_id):
     elif request.method == 'DELETE':
         record.delete()
         return Response({'status': 'success', 'message': 'Record deleted'}, status=200)
-    
 
-    # backend/financials/views.py - Add these at the end of the file
 
-from .models import Expense
-from .serializers import ExpenseSerializer
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def expense_list(request):
@@ -419,7 +407,6 @@ def expense_list(request):
     user = request.user
     
     if request.method == 'GET':
-        # Get properties based on user role
         if user.role == 'admin':
             properties = Property.objects.all()
         elif user.role == 'staff':
@@ -429,7 +416,6 @@ def expense_list(request):
         
         expenses = Expense.objects.filter(property__in=properties)
         
-        # Apply filters
         property_id = request.GET.get('property_id')
         if property_id:
             expenses = expenses.filter(property_id=property_id)
@@ -443,38 +429,18 @@ def expense_list(request):
         return Response(serializer.data)
     
     elif request.method == 'POST':
-        print("=" * 50)
-        print("Creating expense...")
-        
-        # Get data from request (works with both JSON and FormData)
         property_id = request.data.get('property_id') or request.POST.get('property_id')
         category = request.data.get('category') or request.POST.get('category')
         description = request.data.get('description') or request.POST.get('description', '')
         date = request.data.get('date') or request.POST.get('date')
         amount = request.data.get('amount') or request.POST.get('amount')
         
-        print(f"property_id: {property_id}")
-        print(f"category: {category}")
-        print(f"amount: {amount}")
-        print(f"date: {date}")
-        print(f"description: {description}")
-        
-        # Validate required fields
-        if not property_id:
-            return Response({'error': 'property_id is required'}, status=400)
-        if not category:
-            return Response({'error': 'category is required'}, status=400)
-        if not amount:
-            return Response({'error': 'amount is required'}, status=400)
-        if not date:
-            return Response({'error': 'date is required'}, status=400)
+        if not property_id or not category or not amount or not date:
+            return Response({'error': 'Missing required fields'}, status=400)
         
         try:
-            # Get the property
             property_obj = Property.objects.get(id=property_id)
-            print(f"Found property: {property_obj.name}")
             
-            # Create expense directly (bypass serializer if needed)
             expense = Expense.objects.create(
                 property=property_obj,
                 category=category,
@@ -483,28 +449,19 @@ def expense_list(request):
                 amount=amount,
             )
             
-            # Handle receipt file if present
             if request.FILES.get('receipt'):
                 expense.receipt = request.FILES['receipt']
                 expense.has_receipt = True
                 expense.save()
-                print(f"Receipt uploaded: {expense.receipt.name}")
             
-            print(f"✅ Expense created with ID: {expense.id}")
-            
-            # Return the created expense
             serializer = ExpenseSerializer(expense)
             return Response(serializer.data, status=201)
             
         except Property.DoesNotExist:
-            print(f"Property with id {property_id} not found")
             return Response({'error': 'Property not found'}, status=404)
         except Exception as e:
-            print(f"Error creating expense: {str(e)}")
-            import traceback
-            traceback.print_exc()
             return Response({'error': str(e)}, status=400)
-        
+
 
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
@@ -516,14 +473,6 @@ def expense_detail(request, pk):
         expense = Expense.objects.get(id=pk)
     except Expense.DoesNotExist:
         return Response({'error': 'Expense not found'}, status=404)
-    
-    # Check permissions
-    if user.role == 'admin':
-        pass
-    elif user.role == 'staff' and hasattr(expense.property, 'agency') and expense.property.agency != user.agency:
-        return Response({'error': 'Permission denied'}, status=403)
-    elif user.role == 'owner' and hasattr(expense.property, 'owner') and expense.property.owner.user != user:
-        return Response({'error': 'Permission denied'}, status=403)
     
     if request.method == 'GET':
         serializer = ExpenseSerializer(expense)
@@ -540,16 +489,7 @@ def expense_detail(request, pk):
     elif request.method == 'DELETE':
         expense.delete()
         return Response({'status': 'success', 'message': 'Expense deleted'}, status=200)
-    
-    # backend/financials/views.py - Add reports endpoint
 
-from datetime import datetime, timedelta
-from django.db.models import Sum, Count
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-from io import BytesIO
-from django.http import HttpResponse
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -557,7 +497,6 @@ def get_reports(request):
     """Get all reports with financial data for charts"""
     user = request.user
     
-    # Get properties based on user role
     if user.role == 'admin':
         properties = Property.objects.all()
     elif user.role == 'staff':
@@ -565,10 +504,8 @@ def get_reports(request):
     else:
         properties = Property.objects.filter(owner__user=user)
     
-    # Get all financial records
     records = FinancialRecord.objects.filter(property__in=properties)
     
-    # Group by month for performance chart
     performance_data = []
     current_year = datetime.now().year
     
@@ -579,13 +516,12 @@ def get_reports(request):
         total_profit = total_revenue - total_expenses
         
         performance_data.append({
-            'name': FinancialRecord.Month(month).label[:3],
+            'name': get_month_name(month)[:3],
             'revenue': float(total_revenue),
             'expenses': float(total_expenses),
             'profit': float(total_profit)
         })
     
-    # Calculate pie chart data (profit vs expenses ratio)
     total_all_revenue = records.aggregate(total=Sum('revenue'))['total'] or 0
     total_all_expenses = records.aggregate(total=Sum('expenses'))['total'] or 0
     net_profit = total_all_revenue - total_all_expenses
@@ -595,25 +531,20 @@ def get_reports(request):
         {'name': 'Net Profit', 'value': float(net_profit) if net_profit > 0 else 0}
     ]
     
-    # Generate report list
     reports_list = []
-    # Generate monthly reports for the last 6 months
     for i in range(6):
         date = datetime.now() - timedelta(days=30 * i)
         month_records = records.filter(month=date.month, year=date.year)
         reports_list.append({
             'id': i + 1,
-            'name': f"{FinancialRecord.Month(date.month).label} {date.year} Financial Report",
+            'name': f"{get_month_name(date.month)} {date.year} Financial Report",
             'type': 'Monthly',
             'generated_date': (date.replace(day=1) + timedelta(days=32)).replace(day=1).strftime('%B %d, %Y'),
             'property_count': properties.count(),
             'total_revenue': float(month_records.aggregate(total=Sum('revenue'))['total'] or 0)
         })
     
-    # Get latest report
     latest_report = reports_list[0] if reports_list else {}
-    
-    # Calculate YTD revenue
     ytd_revenue = records.filter(year=current_year).aggregate(total=Sum('revenue'))['total'] or 0
     
     return Response({
@@ -637,36 +568,101 @@ def get_reports(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def download_report(request, report_id):
-    """Generate and download a PDF report"""
+def property_occupancy(request, property_id):
+    """Calculate occupancy rate for a specific property based on financial records"""
     user = request.user
     
-    # Generate PDF
-    buffer = BytesIO()
-    p = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
+    year = request.GET.get('year', datetime.now().year)
     
-    # Title
-    p.setFont("Helvetica-Bold", 24)
-    p.drawString(50, height - 50, f"Financial Report #{report_id}")
+    try:
+        property_obj = Property.objects.get(id=property_id)
+    except Property.DoesNotExist:
+        return Response({'error': 'Property not found'}, status=404)
     
-    p.setFont("Helvetica", 12)
-    p.drawString(50, height - 80, f"Generated on: {datetime.now().strftime('%B %d, %Y')}")
+    # Check permissions
+    if user.role == 'admin':
+        pass
+    elif user.role == 'staff' and property_obj.agency != user.agency:
+        return Response({'error': 'Permission denied'}, status=403)
+    elif user.role == 'owner' and property_obj.owner and property_obj.owner.user != user:
+        return Response({'error': 'Permission denied'}, status=403)
     
-    # Add content
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, height - 120, "Summary")
+    # Get financial records for this property
+    records = FinancialRecord.objects.filter(property=property_obj, year=year)
     
-    p.setFont("Helvetica", 12)
-    p.drawString(50, height - 150, "This report contains financial data for all properties.")
+    period_start = datetime(int(year), 1, 1).date()
+    period_end = datetime.now().date()
     
-    p.showPage()
-    p.save()
+    # Calculate total days in period
+    total_days = (period_end - period_start).days + 1
     
-    buffer.seek(0)
+    # Calculate total booked days from stays
+    booked_days = 0
+    total_revenue = 0
+    total_stays = records.count()
     
-    response = HttpResponse(buffer, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="financial_report_{report_id}.pdf"'
+    for record in records:
+        if record.check_in and record.check_out:
+            check_in = record.check_in
+            check_out = record.check_out
+            
+            if check_in <= period_end and check_out >= period_start:
+                start = max(check_in, period_start)
+                end = min(check_out, period_end)
+                
+                if start <= end:
+                    days = (end - start).days + 1
+                    booked_days += days
+                    total_revenue += float(record.revenue)
     
-    return response
-
+    # Calculate occupancy rate
+    occupancy_rate = (booked_days / total_days * 100) if total_days > 0 else 0
+    
+    # Calculate monthly breakdown
+    monthly_breakdown = []
+    for month in range(1, 13):
+        month_records = records.filter(month=month)
+        month_start = datetime(int(year), month, 1).date()
+        
+        if month == 12:
+            month_end = datetime(int(year) + 1, 1, 1).date() - timedelta(days=1)
+        else:
+            month_end = datetime(int(year), month + 1, 1).date() - timedelta(days=1)
+        
+        if month_end > period_end:
+            month_end = period_end
+        
+        month_booked = 0
+        for record in month_records:
+            if record.check_in and record.check_out:
+                start = max(record.check_in, month_start)
+                end = min(record.check_out, month_end)
+                if start <= end:
+                    month_booked += (end - start).days + 1
+        
+        month_days = (month_end - month_start).days + 1
+        month_occupancy = (month_booked / month_days * 100) if month_days > 0 else 0
+        
+        monthly_breakdown.append({
+            'month': month,
+            'month_name': get_month_name(month),
+            'year': year,
+            'booked_days': month_booked,
+            'total_days': month_days,
+            'occupancy_rate': round(month_occupancy, 1)
+        })
+    
+    return Response({
+        'property_id': property_obj.id,
+        'property_name': property_obj.name,
+        'period': {
+            'start_date': period_start,
+            'end_date': period_end,
+            'total_days': total_days
+        },
+        'booked_days': booked_days,
+        'occupancy_rate': round(occupancy_rate, 1),
+        'total_revenue': round(total_revenue, 2),
+        'total_stays': total_stays,
+        'monthly_breakdown': monthly_breakdown
+    })
