@@ -2,33 +2,40 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, FileText } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Download, FileText, Calendar, Filter, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import api from "@/lib/axios";
 
-interface Financial {
-  property: { id: number; name: string };
-  month: number;
-  month_display: string;
-  year: number;
-  owner_payout: string;
-}
-
-interface Property {
+interface Report {
   id: number;
   name: string;
+  report_type: string;
+  report_scope: string;
+  month: number | null;
+  year: number;
+  property_id: number | null;
+  property_name: string;
+  total_revenue: number;
+  total_commission: number;
+  total_expenses: number;
+  net_profit: number;
+  property_count: number;
+  created_at: string;
+  details: any;
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
 
 export default function OwnerReportsPage() {
   const router = useRouter();
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [financials, setFinancials] = useState<Financial[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState<string | null>(null);
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().getMonth() + 1;
+  const [downloading, setDownloading] = useState<number | null>(null);
+  const [filterType, setFilterType] = useState<"all" | "monthly" | "yearly">("all");
+  const [selectedYear, setSelectedYear] = useState<number | "all">("all");
+  const [expandedReport, setExpandedReport] = useState<number | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -36,84 +43,40 @@ export default function OwnerReportsPage() {
   }, [router]);
 
   useEffect(() => {
-    fetchData();
+    fetchReports();
   }, []);
 
-  const fetchData = async () => {
+  const fetchReports = async () => {
+    setLoading(true);
     try {
-      const res = await api.get("/api/properties/");
-      const propsData = Array.isArray(res.data) ? res.data : res.data.results ?? [];
-      setProperties(propsData);
-
-      const allFinancials: Financial[] = [];
-      for (const prop of propsData) {
-        try {
-          const finRes = await api.get(`/financials/summary/${prop.id}/?year=${currentYear}`);
-          const finData = Array.isArray(finRes.data) ? finRes.data : [];
-          allFinancials.push(...finData);
-        } catch {
-        }
-      }
-      setFinancials(allFinancials);
+      // Fetch reports from backend - only owner scope
+      const response = await api.get("/api/reports/reports/?report_scope=owner");
+      const reportsData = response.data.reports || [];
+      
+      // Sort by date (newest first)
+      reportsData.sort((a: Report, b: Report) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      
+      setReports(reportsData);
     } catch (err) {
-      console.error("Error:", err);
+      console.error("Error fetching reports:", err);
+      setReports([]);
     } finally {
       setLoading(false);
     }
   };
 
-
-  const getLast6Months = () => {
-    const result = [];
-    for (let i = 5; i >= 0; i--) {
-      let month = currentMonth - i;
-      let year = currentYear;
-      if (month <= 0) {
-        month += 12;
-        year -= 1;
-      }
-      const monthFins = financials.filter(f => f.month === month && f.year === year);
-      const total = monthFins.reduce((sum, f) => sum + Number(f.owner_payout), 0);
-      result.push({
-        month: MONTHS[month - 1],
-        payout: total,
-      });
-    }
-    return result;
-  };
-
-  const chartData = getLast6Months();
-
-  const getReportMonths = () => {
-    const months = [...new Set(financials.map(f => `${f.year}-${f.month}`))];
-    months.sort((a, b) => b.localeCompare(a));
-    return months.map(key => {
-      const [year, month] = key.split("-").map(Number);
-      const monthFins = financials.filter(f => f.month === month && f.year === year);
-      return {
-        key,
-        year,
-        month,
-        monthDisplay: MONTHS[month - 1],
-        totalPayout: monthFins.reduce((sum, f) => sum + Number(f.owner_payout), 0),
-        propertyIds: monthFins.map(f => f.property.id),
-      };
-    });
-  };
-
-  const reportMonths = getReportMonths();
-
-  // Download PDF
-  const handleDownload = async (propertyId: number, year: number, month: number, label: string) => {
-    setDownloading(label);
+  const handleDownload = async (reportId: number, reportName: string) => {
+    setDownloading(reportId);
     try {
-      const res = await api.get(`/reports/monthly/${propertyId}/?year=${year}&month=${month}`, {
+      const res = await api.get(`/api/reports/reports/${reportId}/download/`, {
         responseType: 'blob',
       });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `report-${label}.pdf`);
+      link.setAttribute('download', `${reportName.replace(/\s/g, '_')}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -125,118 +88,232 @@ export default function OwnerReportsPage() {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    // dateString comes as "January 15, 2025 at 14:30"
+    return dateString;
+  };
+
+  const getReportDisplayName = (report: Report) => {
+    return report.name;
+  };
+
+  // Filter reports
+  const filteredReports = reports.filter(report => {
+    if (filterType !== "all" && report.report_type !== filterType) return false;
+    if (selectedYear !== "all" && report.year !== selectedYear) return false;
+    return true;
+  });
+
+  // Get available years from reports
+  const availableYears = [...new Set(reports.map(r => r.year))].sort((a, b) => b - a);
+
   return (
     <div className="p-8 bg-[#f9fafb] min-h-screen">
 
-      <div className="flex justify-between items-start mb-8">
+      <div className="flex justify-between items-start mb-8 flex-wrap gap-4">
         <div>
           <p className="text-sm text-gray-400 mb-1">Home › Reports</p>
-          <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Reports Library</h1>
+          <p className="text-sm text-gray-500 mt-1">Financial reports generated by your agency</p>
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-        <h2 className="font-bold text-gray-900 text-lg mb-1">Financial Analytics</h2>
-        <p className="text-sm text-gray-400 mb-6">Monthly Net Income (Last 6 Months)</p>
-        {loading ? (
-          <div className="h-64 bg-gray-50 rounded-xl animate-pulse" />
-        ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData} barSize={60}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 12, fill: "#9ca3af" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fill: "#9ca3af" }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={v => `${v.toLocaleString()} MAD`}
-              />
-              <Tooltip
-                formatter={(value) => [`${Number(value).toLocaleString()} MAD`]}
-                cursor={{ fill: "#f3e8ff" }}
-              />
-              <Bar dataKey="payout" fill="#581c87" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+      {/* Filters */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="flex items-center gap-2">
+            <Filter size={16} className="text-gray-400" />
+            <span className="text-sm font-medium text-gray-700">Filters:</span>
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilterType("all")}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
+                filterType === "all" 
+                  ? "bg-[#581c87] text-white" 
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilterType("monthly")}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
+                filterType === "monthly" 
+                  ? "bg-[#581c87] text-white" 
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              onClick={() => setFilterType("yearly")}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
+                filterType === "yearly" 
+                  ? "bg-[#581c87] text-white" 
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Yearly
+            </button>
+          </div>
+
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value === "all" ? "all" : Number(e.target.value))}
+            className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white"
+          >
+            <option value="all">All Years</option>
+            {availableYears.map(year => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+
+          {reports.length > 0 && (
+            <span className="text-xs text-gray-400 ml-auto">
+              {filteredReports.length} report{filteredReports.length !== 1 ? 's' : ''} found
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-        <h2 className="font-bold text-gray-900 text-lg mb-6">Annual Statements</h2>
-
+      {/* Reports List */}
+      <div className="space-y-4">
         {loading ? (
-          <div className="space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-50 rounded-xl animate-pulse" />
-            ))}
+          [...Array(3)].map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 animate-pulse">
+              <div className="flex justify-between items-start">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-gray-100 rounded-xl" />
+                  <div>
+                    <div className="h-5 bg-gray-100 rounded w-48 mb-2" />
+                    <div className="h-3 bg-gray-100 rounded w-32" />
+                  </div>
+                </div>
+                <div className="w-24 h-8 bg-gray-100 rounded-lg" />
+              </div>
+            </div>
+          ))
+        ) : filteredReports.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+            <FileText size={48} className="mx-auto mb-3 text-gray-200" />
+            <p className="text-gray-500 font-medium">No reports available</p>
+            <p className="text-sm text-gray-400 mt-1">Reports will appear here once generated by your agency</p>
           </div>
-        ) : reportMonths.length === 0 ? (
-          <div className="space-y-3">
-            {[...Array(4)].map((_, i) => {
-              let month = currentMonth - i;
-              let year = currentYear;
-              if (month <= 0) { month += 12; year -= 1; }
-              const label = `${MONTHS[month - 1]} ${year}`;
-              return (
-                <div key={i} className={`flex items-center justify-between p-4 rounded-xl border ${i === 0 ? "border-[#581c87]/20 bg-purple-50" : "border-gray-100"}`}>
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${i === 0 ? "bg-[#581c87]" : "bg-purple-100"}`}>
-                      <FileText size={18} className={i === 0 ? "text-white" : "text-[#581c87]"} />
+        ) : (
+          filteredReports.map((report) => {
+            const reportName = getReportDisplayName(report);
+            const isExpanded = expandedReport === report.id;
+            
+            return (
+              <div 
+                key={report.id} 
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all"
+              >
+                <div className="p-5">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                        <FileText size={22} className="text-[#581c87]" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-900 text-lg">{reportName}</h3>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Calendar size={12} />
+                            Generated: {formatDate(report.created_at)}
+                          </span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            report.report_type === 'monthly' 
+                              ? 'bg-blue-50 text-blue-600' 
+                              : 'bg-purple-50 text-purple-600'
+                          }`}>
+                            {report.report_type === 'monthly' ? 'Monthly Report' : 'Yearly Report'}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {report.property_name}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{label} Financial Statement</p>
-                      <p className="text-xs text-gray-400">Generated on {label}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right mr-2">
+                        <p className="text-sm font-semibold text-green-600">
+                          {report.net_profit.toLocaleString()} MAD
+                        </p>
+                        <p className="text-xs text-gray-400">Net Profit</p>
+                      </div>
+                      <button
+                        onClick={() => handleDownload(report.id, reportName)}
+                        disabled={downloading === report.id}
+                        className="flex items-center gap-2 bg-[#581c87] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#4c1d95] transition-all disabled:opacity-50"
+                      >
+                        {downloading === report.id ? (
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <Download size={15} />
+                        )}
+                        {downloading === report.id ? "..." : "Download"}
+                      </button>
+                      <button
+                        onClick={() => setExpandedReport(isExpanded ? null : report.id)}
+                        className="p-2 text-gray-400 hover:text-[#581c87] transition-colors"
+                      >
+                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </button>
                     </div>
                   </div>
-                  {properties[0] && (
-                    <button
-                      onClick={() => handleDownload(properties[0].id, year, month, label)}
-                      disabled={downloading === label}
-                      className="flex items-center gap-2 bg-[#581c87] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#4c1d95] transition-all disabled:opacity-50"
-                    >
-                      <Download size={15} />
-                      {downloading === label ? "..." : "Download"}
-                    </button>
+
+                  {/* Expanded Details */}
+                  {isExpanded && (
+                    <div className="mt-5 pt-4 border-t border-gray-100">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-400">Total Revenue</p>
+                          <p className="text-lg font-semibold text-gray-900">
+                            {report.total_revenue.toLocaleString()} MAD
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Commission</p>
+                          <p className="text-lg font-semibold text-red-500">
+                            {report.total_commission.toLocaleString()} MAD
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Expenses</p>
+                          <p className="text-lg font-semibold text-orange-500">
+                            {report.total_expenses.toLocaleString()} MAD
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-400">Net Profit</p>
+                          <p className="text-lg font-semibold text-green-600">
+                            {report.net_profit.toLocaleString()} MAD
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400">
+                        Generated by agency on {formatDate(report.created_at)}
+                      </div>
+                    </div>
                   )}
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {reportMonths.map((report) => {
-              const label = `${report.monthDisplay} ${report.year}`;
-              return (
-                <div key={report.key} className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-purple-200 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
-                      <FileText size={18} className="text-[#581c87]" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{label} Financial Statement</p>
-                      <p className="text-xs text-gray-400">Generated on {label}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleDownload(report.propertyIds[0], report.year, report.month, label)}
-                    disabled={downloading === label}
-                    className="flex items-center gap-2 bg-[#581c87] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#4c1d95] transition-all disabled:opacity-50"
-                  >
-                    <Download size={15} />
-                    {downloading === label ? "..." : "Download"}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })
         )}
       </div>
+
+      {/* Summary Stats */}
+      {!loading && reports.length > 0 && (
+        <div className="mt-6 bg-gray-100 rounded-xl p-4 text-center">
+          <p className="text-sm text-gray-500">
+            Total reports available: <span className="font-semibold text-[#581c87]">{reports.length}</span>
+          </p>
+        </div>
+      )}
     </div>
   );
 }

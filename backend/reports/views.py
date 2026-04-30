@@ -1,4 +1,4 @@
-# backend/reports/views.py - COMPLETE FIXED VERSION
+# backend/reports/views.py - COMPLETE FIXED VERSION WITH OWNER_ID SUPPORT
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -103,13 +103,14 @@ def get_reports(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def generate_report(request):
-    """Generate a report for specific property or all properties"""
+    """Generate a report for specific property, owner, or all properties"""
     user = request.user
     
     try:
         report_type = request.data.get('report_type', 'monthly')
         report_scope = request.data.get('report_scope', 'agency')
         property_id = request.data.get('property_id')
+        owner_id = request.data.get('owner_id')  # NEW: owner_id parameter
         month = request.data.get('month')
         year = request.data.get('year')
         
@@ -128,7 +129,19 @@ def generate_report(request):
             return Response({'error': 'Property owners can only generate Owner Reports'}, status=403)
         
         # Get properties based on selection and user role
-        if property_id and property_id != 'all':
+        selected_owner = None
+        
+        # NEW: Handle owner_id first
+        if owner_id:
+            from owners.models import Owner
+            try:
+                selected_owner = Owner.objects.get(id=owner_id)
+                properties = Property.objects.filter(owner=selected_owner)
+                if not properties.exists():
+                    return Response({'error': f'No properties found for this owner'}, status=404)
+            except Owner.DoesNotExist:
+                return Response({'error': 'Owner not found'}, status=404)
+        elif property_id and property_id != 'all':
             try:
                 properties = Property.objects.filter(id=property_id)
                 if user.role == 'owner':
@@ -215,14 +228,21 @@ def generate_report(request):
             
             agency_net_profit = total_commission - total_expenses
             
-            if report_type == 'monthly':
-                if property_id and property_id != 'all':
+            # Generate report name based on scope
+            if owner_id and selected_owner:
+                owner_name = f"{selected_owner.user.first_name} {selected_owner.user.last_name}".strip()
+                if report_type == 'monthly':
+                    report_name = f"Agency Report - Owner: {owner_name} - {get_month_name(month)} {year}"
+                else:
+                    report_name = f"Agency Report - Owner: {owner_name} - Year {year}"
+            elif property_id and property_id != 'all':
+                if report_type == 'monthly':
                     report_name = f"Agency Report - {properties.first().name} - {get_month_name(month)} {year}"
                 else:
-                    report_name = f"Agency Report - {get_month_name(month)} {year}"
-            else:
-                if property_id and property_id != 'all':
                     report_name = f"Agency Report - {properties.first().name} - Year {year}"
+            else:
+                if report_type == 'monthly':
+                    report_name = f"Agency Report - {get_month_name(month)} {year}"
                 else:
                     report_name = f"Agency Report - Year {year}"
             
@@ -340,14 +360,21 @@ def generate_report(request):
             
             owner_net_profit = total_revenue - total_commission - total_expenses
             
-            if report_type == 'monthly':
-                if property_id and property_id != 'all':
+            # Generate report name based on scope
+            if owner_id and selected_owner:
+                owner_name = f"{selected_owner.user.first_name} {selected_owner.user.last_name}".strip()
+                if report_type == 'monthly':
+                    report_name = f"Owner Report - {owner_name} - {get_month_name(month)} {year}"
+                else:
+                    report_name = f"Owner Report - {owner_name} - Year {year}"
+            elif property_id and property_id != 'all':
+                if report_type == 'monthly':
                     report_name = f"Owner Report - {properties.first().name} - {get_month_name(month)} {year}"
                 else:
-                    report_name = f"Owner Report - {get_month_name(month)} {year}"
-            else:
-                if property_id and property_id != 'all':
                     report_name = f"Owner Report - {properties.first().name} - Year {year}"
+            else:
+                if report_type == 'monthly':
+                    report_name = f"Owner Report - {get_month_name(month)} {year}"
                 else:
                     report_name = f"Owner Report - Year {year}"
             

@@ -1,5 +1,7 @@
+# backend/properties/serializers.py
 from rest_framework import serializers
 from .models import Property, PropertyImage
+from owners.models import Owner
 
 class PropertyImageSerializer(serializers.ModelSerializer):
     """Serializer for property images"""
@@ -17,12 +19,26 @@ class PropertyImageSerializer(serializers.ModelSerializer):
         return obj.image.url if obj.image else None
 
 
+class CreatePropertySerializer(serializers.ModelSerializer):
+    """Serializer for creating a new property"""
+    
+    class Meta:
+        model = Property
+        fields = [
+            'name', 'location', 'property_type', 'description',
+            'bedrooms', 'bathrooms', 'area_sqm', 'monthly_rent',
+            'owner', 'living_rooms', 'kitchen_status', 'dining_room',
+            'has_balcony', 'has_garden', 'parking_status'
+        ]
+
+
 class PropertySerializer(serializers.ModelSerializer):
     agency_name = serializers.SerializerMethodField()
     owner_name = serializers.SerializerMethodField()
     property_type_display = serializers.SerializerMethodField()
     status_display = serializers.SerializerMethodField()
     images = PropertyImageSerializer(many=True, read_only=True)
+    images_urls = serializers.SerializerMethodField()
     
     class Meta:
         model = Property
@@ -30,7 +46,7 @@ class PropertySerializer(serializers.ModelSerializer):
             'id', 'name', 'location', 'property_type', 'property_type_display',
             'status', 'status_display', 'description', 'bedrooms', 'bathrooms',
             'area_sqm', 'monthly_rent', 'is_active', 'agency', 'agency_name',
-            'owner', 'owner_name', 'images', 'created_at', 'updated_at',
+            'owner', 'owner_name', 'images', 'images_urls', 'created_at', 'updated_at',
             'living_rooms', 'kitchen_status', 'dining_room', 'has_balcony', 
             'has_garden', 'parking_status'
         ]
@@ -49,24 +65,20 @@ class PropertySerializer(serializers.ModelSerializer):
     
     def get_status_display(self, obj):
         return obj.get_status_display()
-
-
-class CreatePropertySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Property
-        fields = [
-            'name', 'location', 'property_type', 'description',
-            'bedrooms', 'bathrooms', 'area_sqm', 'monthly_rent',
-            'owner', 'living_rooms', 'kitchen_status', 'dining_room',
-            'has_balcony', 'has_garden', 'parking_status'
-        ]
+    
+    def get_images_urls(self, obj):
+        """Return full URLs for all property images"""
+        request = self.context.get('request')
+        if request:
+            return [request.build_absolute_uri(img.image.url) for img in obj.images.all() if img.image]
+        return [img.image.url for img in obj.images.all() if img.image]
 
 
 class AssignOwnerSerializer(serializers.Serializer):
+    """Serializer for assigning an owner to a property"""
     owner_id = serializers.IntegerField(required=True)
     
     def validate_owner_id(self, value):
-        from owners.models import Owner
         try:
             owner = Owner.objects.get(id=value)
             return owner

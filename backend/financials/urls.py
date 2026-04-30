@@ -16,4 +16,7 @@ urlpatterns = [
     path('expenses/<int:pk>/', views.expense_detail, name='expense-detail'),
     path('get-reports/', views.get_reports, name='get-reports'),
     path('property-occupancy/<int:property_id>/', views.property_occupancy, name='property-occupancy'),
+    path('monthly-summary/<int:property_id>/', views.monthly_summary, name='monthly-summary'),
+    path('property-occupancy/<int:property_id>/', views.property_occupancy, name='property-occupancy'),
+    path('expenses/', views.expense_list, name='expense-list'),
 ]

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Loader2, Download, Calendar, Building2, DollarSign, FileText, TrendingUp, Plus, Trash2, Eye, X, ChevronDown, ChevronUp, Receipt } from "lucide-react";
+import { Loader2, Download, Calendar, Building2, DollarSign, FileText, TrendingUp, Plus, Trash2, Eye, X, ChevronDown, ChevronUp, Receipt, Users } from "lucide-react";
 import api from "@/lib/axios";
 
 interface Report {
@@ -49,6 +49,7 @@ interface PropertyDetail {
   expenses?: ExpenseDetail[];
   booking_count: number;
   expense_count: number;
+  owner?: Owner; // Add owner to property details
 }
 
 interface Booking {
@@ -83,15 +84,25 @@ interface Property {
   id: number;
   name: string;
   location: string;
+  owner_id?: number;
+  owner_name?: string;
   price_per_night?: number;
+  owner?: Owner;
 }
 
-interface ReportPayload {
-  report_type: string;
-  report_scope?: string;
-  year: number;
-  month?: number;
-  property_id?: string;
+interface Owner {
+  id: number;
+  user?: {
+    id: number;
+    email: string;
+    first_name: string;
+    last_name: string;
+  };
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  name?: string;
 }
 
 export default function ReportsPage() {
@@ -102,11 +113,13 @@ export default function ReportsPage() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [properties, setProperties] = useState<Property[]>([]);
+  const [owners, setOwners] = useState<Owner[]>([]);
   const [expandedProperties, setExpandedProperties] = useState<Set<number>>(new Set());
   
   // Generate form states
   const [reportTypeChoice, setReportTypeChoice] = useState<"agency" | "owner">("agency");
-  const [reportScope, setReportScope] = useState<"agency" | "single">("agency");
+  const [reportScope, setReportScope] = useState<"agency" | "single" | "owner">("agency");
+  const [selectedOwnerId, setSelectedOwnerId] = useState<string>("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>("");
   const [reportPeriod, setReportPeriod] = useState<"monthly" | "yearly">("monthly");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -147,6 +160,33 @@ export default function ReportsPage() {
     { value: 'yearly', label: 'Yearly' }
   ];
 
+  // Helper function to get owner full name from various data structures
+  const getOwnerFullName = useCallback((owner: any): string => {
+    if (!owner) return 'Unknown Owner';
+    
+    // If owner has user object with first_name and last_name
+    if (owner.user) {
+      const fullName = `${owner.user.first_name || ''} ${owner.user.last_name || ''}`.trim();
+      if (fullName) return fullName;
+      if (owner.user.email) return owner.user.email;
+    }
+    
+    // If owner has direct first_name and last_name properties
+    if (owner.first_name || owner.last_name) {
+      const fullName = `${owner.first_name || ''} ${owner.last_name || ''}`.trim();
+      if (fullName) return fullName;
+    }
+    
+    // If owner has a name property
+    if (owner.name) return owner.name;
+    
+    // If owner has email
+    if (owner.email) return owner.email;
+    
+    // Fallback
+    return `Owner #${owner.id}`;
+  }, []);
+
   const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
@@ -177,15 +217,61 @@ export default function ReportsPage() {
     }
   }, []);
 
+  const fetchOwners = useCallback(async () => {
+    try {
+      const response = await api.get('/api/owners/');
+      let ownersData = Array.isArray(response.data) ? response.data : response.data.results || [];
+      
+      // Transform owners data to ensure consistent structure
+      ownersData = ownersData.map((owner: any) => {
+        // If owner doesn't have a user object but has first_name/last_name directly
+        if (!owner.user && (owner.first_name || owner.last_name)) {
+          return {
+            ...owner,
+            user: {
+              id: owner.id,
+              email: owner.email || '',
+              first_name: owner.first_name || '',
+              last_name: owner.last_name || ''
+            }
+          };
+        }
+        // If owner has user object but missing first_name/last_name
+        if (owner.user && (!owner.user.first_name || !owner.user.last_name)) {
+          return {
+            ...owner,
+            user: {
+              ...owner.user,
+              first_name: owner.user.first_name || owner.first_name || '',
+              last_name: owner.user.last_name || owner.last_name || '',
+              email: owner.user.email || owner.email || ''
+            }
+          };
+        }
+        return owner;
+      });
+      
+      setOwners(ownersData);
+    } catch (err) {
+      console.error("Error fetching owners:", err);
+    }
+  }, []);
+
+  // Filter properties by selected owner
+  const filteredProperties = selectedOwnerId 
+    ? properties.filter(p => p.owner_id === parseInt(selectedOwnerId))
+    : properties;
+
   useEffect(() => {
     fetchReports();
     fetchProperties();
-  }, [fetchReports, fetchProperties]);
+    fetchOwners();
+  }, [fetchReports, fetchProperties, fetchOwners]);
 
   const handleGenerateReport = async () => {
     setGenerating(true);
     try {
-      const payload: ReportPayload = {
+      const payload: any = {
         report_type: reportPeriod,
         report_scope: reportTypeChoice,
         year: selectedYear
@@ -195,7 +281,11 @@ export default function ReportsPage() {
         payload.month = selectedMonth;
       }
       
-      if (reportScope === 'single' && selectedPropertyId) {
+      // Handle different scope selections
+      if (reportScope === 'owner' && selectedOwnerId) {
+        payload.owner_id = parseInt(selectedOwnerId);
+        payload.property_id = 'all';
+      } else if (reportScope === 'single' && selectedPropertyId) {
         payload.property_id = selectedPropertyId;
       } else if (reportScope === 'agency') {
         payload.property_id = 'all';
@@ -220,6 +310,7 @@ export default function ReportsPage() {
   const resetGenerateForm = () => {
     setReportTypeChoice("agency");
     setReportScope("agency");
+    setSelectedOwnerId("");
     setSelectedPropertyId("");
     setReportPeriod("monthly");
     setSelectedMonth(new Date().getMonth() + 1);
@@ -322,7 +413,7 @@ export default function ReportsPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Financial Reports</h1>
-          <p className="text-sm text-gray-500 mt-1">Generate and manage financial reports by property or agency-wide</p>
+          <p className="text-sm text-gray-500 mt-1">Generate and manage financial reports by agency, owner, or property</p>
         </div>
         <button 
           onClick={() => setShowGenerateModal(true)}
@@ -539,8 +630,23 @@ export default function ReportsPage() {
                       className="w-4 h-4 text-[#581c87]"
                     />
                     <div className="flex-1">
-                      <span className="font-semibold text-gray-900">All Properties</span>
+                      <span className="font-semibold text-gray-900">🌍 All Properties</span>
                       <p className="text-xs text-gray-500 mt-0.5">Includes all properties combined with breakdown per property</p>
+                    </div>
+                  </label>
+                  
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${reportScope === 'owner' ? 'border-[#581c87] bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                    <input
+                      type="radio"
+                      name="scope"
+                      value="owner"
+                      checked={reportScope === 'owner'}
+                      onChange={() => setReportScope("owner")}
+                      className="w-4 h-4 text-[#581c87]"
+                    />
+                    <div className="flex-1">
+                      <span className="font-semibold text-gray-900">👤 Specific Owner</span>
+                      <p className="text-xs text-gray-500 mt-0.5">Generate report for all properties owned by a specific owner</p>
                     </div>
                   </label>
                   
@@ -554,12 +660,39 @@ export default function ReportsPage() {
                       className="w-4 h-4 text-[#581c87]"
                     />
                     <div className="flex-1">
-                      <span className="font-semibold text-gray-900">Single Property</span>
+                      <span className="font-semibold text-gray-900">🏠 Single Property</span>
                       <p className="text-xs text-gray-500 mt-0.5">Focus on one specific property only</p>
                     </div>
                   </label>
                 </div>
               </div>
+
+              {/* Owner Selection - FIXED to show full name properly */}
+              {reportScope === 'owner' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Select Owner</label>
+                  <select
+                    value={selectedOwnerId}
+                    onChange={(e) => setSelectedOwnerId(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
+                  >
+                    <option value="">-- Select an owner --</option>
+                    {owners.map((owner) => {
+                      const ownerName = getOwnerFullName(owner);
+                      return (
+                        <option key={owner.id} value={owner.id}>
+                          {ownerName}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {selectedOwnerId && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      This will generate a report for all properties owned by this owner.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Property Selection */}
               {reportScope === 'single' && (
@@ -571,8 +704,10 @@ export default function ReportsPage() {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-[#581c87] focus:ring-1 focus:ring-[#581c87]"
                   >
                     <option value="">-- Select a property --</option>
-                    {properties.map(prop => (
-                      <option key={prop.id} value={prop.id}>{prop.name}</option>
+                    {filteredProperties.map(prop => (
+                      <option key={prop.id} value={prop.id}>
+                        {prop.name} {prop.owner_name ? `(Owner: ${prop.owner_name})` : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -659,7 +794,12 @@ export default function ReportsPage() {
                 </div>
               )}
 
-              {/* Validation Message */}
+              {/* Validation Messages */}
+              {reportScope === 'owner' && !selectedOwnerId && (
+                <div className="bg-yellow-50 rounded-xl p-3 text-sm text-yellow-700">
+                  Please select an owner to generate owner report
+                </div>
+              )}
               {reportScope === 'single' && !selectedPropertyId && (
                 <div className="bg-yellow-50 rounded-xl p-3 text-sm text-yellow-700">
                   Please select a property for single property report
@@ -676,7 +816,10 @@ export default function ReportsPage() {
               </button>
               <button
                 onClick={handleGenerateReport}
-                disabled={generating || (reportScope === 'single' && !selectedPropertyId)}
+                disabled={generating || 
+                  (reportScope === 'single' && !selectedPropertyId) ||
+                  (reportScope === 'owner' && !selectedOwnerId)
+                }
                 className="flex-1 px-4 py-2 rounded-lg bg-[#581c87] text-white hover:bg-[#4c1d95] transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {generating && <Loader2 size={16} className="animate-spin" />}
@@ -744,6 +887,11 @@ export default function ReportsPage() {
                           <div>
                             <h4 className="font-semibold text-gray-900">{prop.name}</h4>
                             <p className="text-xs text-gray-500">{prop.location}</p>
+                            {prop.owner && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Owner: {getOwnerFullName(prop.owner)}
+                              </p>
+                            )}
                           </div>
                           <div className="flex items-center gap-6 text-sm">
                             <span className="text-green-600">{prop.total_revenue.toLocaleString()} DH</span>
@@ -834,43 +982,6 @@ export default function ReportsPage() {
                         )}
                       </div>
                     ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Single Property Bookings List */}
-              {selectedReport.details?.properties && selectedReport.details.properties.length === 1 && (
-                <div>
-                  <h3 className="font-bold text-gray-900 mb-3">📅 Booking List</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left">Guest</th>
-                          <th className="px-3 py-2 text-left">Source</th>
-                          <th className="px-3 py-2 text-left">Check-in</th>
-                          <th className="px-3 py-2 text-left">Check-out</th>
-                          <th className="px-3 py-2 text-right">Nights</th>
-                          <th className="px-3 py-2 text-right">Price/Night</th>
-                          <th className="px-3 py-2 text-right">Revenue</th>
-                          <th className="px-3 py-2 text-right">Commission</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedReport.details.properties[0]?.bookings?.map((booking, idx) => (
-                          <tr key={idx} className="border-b border-gray-100">
-                            <td className="px-3 py-2">{booking.guest_name}</td>
-                            <td className="px-3 py-2">{booking.booking_source}</td>
-                            <td className="px-3 py-2">{booking.check_in}</td>
-                            <td className="px-3 py-2">{booking.check_out}</td>
-                            <td className="px-3 py-2 text-right">{booking.nights}</td>
-                            <td className="px-3 py-2 text-right">{booking.price_per_night.toLocaleString()} DH</td>
-                            <td className="px-3 py-2 text-right text-green-600">{booking.revenue.toLocaleString()} DH</td>
-                            <td className="px-3 py-2 text-right text-purple-600">{booking.commission.toLocaleString()} DH</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   </div>
                 </div>
               )}

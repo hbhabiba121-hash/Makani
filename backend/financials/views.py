@@ -666,3 +666,4 @@ def property_occupancy(request, property_id):
         'total_stays': total_stays,
         'monthly_breakdown': monthly_breakdown
     })
+

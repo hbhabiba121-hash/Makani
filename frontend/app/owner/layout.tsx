@@ -9,17 +9,27 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("access");
     const role = localStorage.getItem("role");
     const userData = localStorage.getItem("user");
 
-    if (!token || role !== "owner") {
+    if (!token) {
       router.push("/login");
       return;
     }
-    if (userData) setUser(JSON.parse(userData));
+
+    if (role !== "owner") {
+      router.push("/login");
+      return;
+    }
+
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
+    setLoading(false);
   }, [router]);
 
   const handleLogout = () => {
@@ -34,9 +44,17 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
     { href: "/owner/reports", label: "Reports", icon: FileText },
   ];
 
-  const initials = user?.full_name
-    ? user.full_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-    : "O";
+  const initials = user?.first_name && user?.last_name
+    ? (user.first_name[0] + user.last_name[0]).toUpperCase()
+    : user?.first_name?.[0]?.toUpperCase() || "O";
+
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-[#f9fafb] items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#581c87]"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-[#f9fafb]">
@@ -105,7 +123,9 @@ export default function OwnerLayout({ children }: { children: React.ReactNode })
 
             <div className="flex items-center gap-3 pl-6 border-l border-gray-100">
               <div className="text-right">
-                <p className="text-sm font-semibold text-gray-900">{user?.full_name || "Owner"}</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {user?.first_name} {user?.last_name}
+                </p>
                 <p className="text-xs text-gray-400">Property Owner</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-[#581c87] flex items-center justify-center text-white text-sm font-bold shadow-sm">

@@ -24,9 +24,32 @@ export default function LoginPage() {
         email: email, 
         password: password 
       });
+      
       localStorage.setItem('access', response.data.access);
       localStorage.setItem('refresh', response.data.refresh);
-      router.push("/dashboard");
+      
+      // Get user profile to know the role
+      try {
+        const userResponse = await api.get('/api/users/profile/');
+        const userData = userResponse.data;
+        localStorage.setItem('user', JSON.stringify(userData));
+        localStorage.setItem('role', userData.role);
+        
+        // Redirect based on role
+        if (userData.role === 'owner') {
+          router.push("/owner");
+        } else if (userData.role === 'admin') {
+          router.push("/dashboard");  // ← THIS IS CORRECT - your dashboard is at /dashboard
+        } else if (userData.role === 'staff') {
+          router.push("/staff");
+        } else {
+          router.push("/dashboard");
+        }
+      } catch (userErr) {
+        console.error("Failed to get user profile", userErr);
+        router.push("/dashboard");
+      }
+      
     } catch (err: any) {
       setError("Email ou mot de passe incorrect.");
     } finally {
