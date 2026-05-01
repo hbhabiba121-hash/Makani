@@ -19,7 +19,6 @@ def get_month_name(month):
               'July', 'August', 'September', 'October', 'November', 'December']
     return months[month - 1] if 1 <= month <= 12 else 'Unknown'
 
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_reports(request):
@@ -33,7 +32,7 @@ def get_reports(request):
     month = request.GET.get('month')
     year = request.GET.get('year')
     
-    # Build query - filter based on user role
+    # Build query
     reports = Report.objects.all()
     
     # Filter by report_scope
@@ -55,14 +54,45 @@ def get_reports(request):
     if year:
         reports = reports.filter(year=year)
     
-    # For owner users, only show reports for their properties
+    # For owner users, only show reports for their properties OR reports with null property that belong to them
     if user.role == 'owner':
         owner_properties = Property.objects.filter(owner__user=user)
-        reports = reports.filter(property__in=owner_properties)
+        owner_property_ids = list(owner_properties.values_list('id', flat=True))
+        
+        # Show reports that either:
+        # 1. Have a property that belongs to the owner
+        # 2. Have null property (all properties report) but the report was generated for this owner
+        #    (check if the report name contains owner name or details reference owner)
+        reports = reports.filter(
+            Q(property__in=owner_properties) |  # Report for specific property they own
+            Q(property__isnull=True)  # Report for all properties (could be owner-specific)
+        )
+        
+        # Additional filtering: For null property reports, we need to check if they belong to this owner
+        # This requires checking the report details JSON or name
+        filtered_reports = []
+        for report in reports:
+            if report.property is not None:
+                # Property exists, already filtered by Q above
+                filtered_reports.append(report)
+            else:
+                # Null property - check if this report belongs to this owner
+                # Check report name or details for owner reference
+                details = report.details or {}
+                properties_in_report = details.get('properties', [])
+                
+                # If any property in the report belongs to this owner, include it
+                owner_property_ids_set = set(owner_property_ids)
+                report_property_ids = [p.get('id') for p in properties_in_report]
+                
+                if any(pid in owner_property_ids_set for pid in report_property_ids):
+                    filtered_reports.append(report)
+        
+        reports = filtered_reports
     
-    reports = reports.order_by('-created_at')
+    reports = sorted(reports, key=lambda x: x.created_at, reverse=True)
     
-    # Serialize data using new field names
+    # Serialize data
     reports_data = []
     for report in reports:
         if report.report_scope == 'agency':
@@ -84,7 +114,7 @@ def get_reports(request):
             'month': report.month,
             'year': report.year,
             'property_id': report.property.id if report.property else None,
-            'property_name': report.property.name if report.property else 'All Properties',
+            'property_name': report.property.name if report.property else 'All Your Properties',
             'total_revenue': total_revenue,
             'total_commission': total_commission,
             'total_expenses': total_expenses,
