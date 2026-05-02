@@ -94,7 +94,7 @@ export default function PropertyDetailPage() {
   const [occupancy, setOccupancy] = useState<OccupancyData | null>(null);
   const [occupancyLoading, setOccupancyLoading] = useState(true);
 
-  // ✅ FIX 1 & 2 — Commission rate + Expenses state
+ 
   const [commissionRate, setCommissionRate] = useState<number>(15);
   const [propertyExpenses, setPropertyExpenses] = useState<number>(0);
 
@@ -103,7 +103,7 @@ export default function PropertyDetailPage() {
     if (!token) router.push("/login");
   }, []);
 
-  // ✅ FIX 2 — fetchExpenses function
+ 
   const fetchExpenses = async (propertyId: string | string[]) => {
     try {
       const res = await api.get(`/api/financials/expenses/?property_id=${propertyId}`);
@@ -148,7 +148,7 @@ export default function PropertyDetailPage() {
     if (params.id) {
       fetchProperty();
       fetchOccupancy();
-      fetchExpenses(params.id); // ✅ FIX 2 — Added here
+      fetchExpenses(params.id); 
     }
   }, [params.id]);
 
@@ -671,7 +671,7 @@ export default function PropertyDetailPage() {
                   </div>
                 </div>
 
-                {/* ✅ FIX 3 — WhatsApp Contact Button */}
+               
                 <button
                   onClick={() => {
                     if (!owner?.phone) {
@@ -698,7 +698,7 @@ export default function PropertyDetailPage() {
             )}
           </div>
 
-          {/* ✅ FIX 4 — Financial Summary with Commission Slider + Real Expenses */}
+        
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h2 className="font-bold text-gray-900 mb-4">Financial Summary</h2>
 
