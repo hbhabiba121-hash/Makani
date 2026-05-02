@@ -31,7 +31,7 @@ interface Notification {
   type: "info" | "warning" | "success";
 }
 
-// Static notifications للـ MVP
+
 const staticNotifications: Notification[] = [
   { id: 1, message: "New booking added for Medina Casa", time: "2 min ago", read: false, type: "success" },
   { id: 2, message: "Expense record updated", time: "1 hour ago", read: false, type: "info" },
@@ -51,13 +51,12 @@ export default function Navbar() {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Notifications states
   const [notifications, setNotifications] = useState<Notification[]>(staticNotifications);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Close dropdowns on outside click
+  
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -80,7 +79,7 @@ export default function Navbar() {
     fetchUser();
   }, []);
 
-  // Search logic — كتجيب من API وتفيلتري frontend
+  
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -142,7 +141,7 @@ export default function Navbar() {
       } finally {
         setSearchLoading(false);
       }
-    }, 400); // debounce 400ms
+    }, 400); 
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
