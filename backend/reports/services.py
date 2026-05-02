@@ -1,4 +1,4 @@
-# backend/reports/services.py - NO DUPLICATION
+# backend/reports/services.py - COMPLETE FIXED VERSION FOR MODEL B
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -84,8 +84,9 @@ class FinancialReportService:
         summary_data = report_data.get('summary', {})
         properties_data = report_data.get('properties', [])
         
-        # Create summary cards based on report scope
+        # Create summary cards based on report scope - MODEL B FIX
         if report_scope == 'agency':
+            # AGENCY REPORT: Agency profit = Commission - Expenses
             card_data = [
                 ['Total Commission', 'Total Expenses', 'Agency Net Profit'],
                 [
@@ -96,16 +97,16 @@ class FinancialReportService:
             ]
             card_widths = [2.8*inch, 2.8*inch, 2.8*inch]
         else:
+            # OWNER REPORT - MODEL B: Owner profit = Revenue - Commission (NO expenses)
             card_data = [
-                ['Total Revenue', 'Commission', 'Expenses', 'Owner Net Profit'],
+                ['Total Revenue', 'Commission', 'Owner Net Profit'],
                 [
                     f"{summary_data.get('total_revenue', 0):,.2f} DH",
                     f"{summary_data.get('total_commission', 0):,.2f} DH",
-                    f"{summary_data.get('total_expenses', 0):,.2f} DH",
                     f"{summary_data.get('net_profit', 0):,.2f} DH"
                 ]
             ]
-            card_widths = [2.1*inch, 2.1*inch, 2.1*inch, 2.1*inch]
+            card_widths = [2.5*inch, 2.5*inch, 2.5*inch]
         
         card_table = Table(card_data, colWidths=card_widths)
         card_table.setStyle(TableStyle([
@@ -140,16 +141,16 @@ class FinancialReportService:
                     ])
                 col_widths = [2.8*inch, 1.8*inch, 1.8*inch, 1.8*inch]
             else:
-                property_table_data = [['Property', 'Revenue (DH)', 'Commission (DH)', 'Expenses (DH)', 'Net Profit (DH)']]
+                # OWNER BREAKDOWN - MODEL B: No expenses in profit calculation
+                property_table_data = [['Property', 'Revenue (DH)', 'Commission (DH)', 'Owner Net Profit (DH)']]
                 for prop in properties_data:
                     property_table_data.append([
                         prop.get('name', 'Unknown'),
                         f"{prop.get('total_revenue', 0):,.2f}",
                         f"{prop.get('total_commission', 0):,.2f}",
-                        f"{prop.get('total_expenses', 0):,.2f}",
                         f"{prop.get('net_profit', 0):,.2f}"
                     ])
-                col_widths = [1.8*inch, 1.3*inch, 1.3*inch, 1.3*inch, 1.3*inch]
+                col_widths = [2.2*inch, 1.5*inch, 1.5*inch, 2*inch]
             
             property_table = Table(property_table_data, colWidths=col_widths)
             property_table.setStyle(TableStyle([
@@ -166,7 +167,7 @@ class FinancialReportService:
             elements.append(property_table)
             elements.append(Spacer(1, 0.3*inch))
         
-        # For each property, show detailed expenses with receipts (ONLY ONCE, no duplicate bookings per property)
+        # For each property, show detailed expenses with receipts (agency pays these)
         for prop in properties_data:
             # Property Header
             prop_title = f"🏠 {prop.get('name', 'Property')}"
@@ -174,7 +175,7 @@ class FinancialReportService:
                 prop_title += f" - {prop.get('location')}"
             elements.append(Paragraph(prop_title, subheader_style))
             
-            # Property Summary based on scope
+            # Property Summary based on scope - MODEL B FIX
             if report_scope == 'agency':
                 prop_summary_data = [
                     ['Commission', 'Expenses', 'Net Profit'],
@@ -186,16 +187,16 @@ class FinancialReportService:
                 ]
                 prop_summary_table = Table(prop_summary_data, colWidths=[2.5*inch, 2.5*inch, 2.5*inch])
             else:
+                # OWNER SUMMARY - MODEL B: No expenses deducted
                 prop_summary_data = [
-                    ['Revenue', 'Commission', 'Expenses', 'Net Profit'],
+                    ['Revenue', 'Commission', 'Owner Net Profit'],
                     [
                         f"{prop.get('total_revenue', 0):,.2f} DH",
                         f"{prop.get('total_commission', 0):,.2f} DH",
-                        f"{prop.get('total_expenses', 0):,.2f} DH",
                         f"{prop.get('net_profit', 0):,.2f} DH"
                     ]
                 ]
-                prop_summary_table = Table(prop_summary_data, colWidths=[1.9*inch, 1.9*inch, 1.9*inch, 1.9*inch])
+                prop_summary_table = Table(prop_summary_data, colWidths=[2.5*inch, 2.5*inch, 2.5*inch])
             
             prop_summary_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), primary_color),
@@ -210,10 +211,10 @@ class FinancialReportService:
             elements.append(prop_summary_table)
             elements.append(Spacer(1, 0.2*inch))
             
-            # EXPENSES SECTION WITH RECEIPT IMAGES (ONLY ONCE - no duplicate bookings)
+            # EXPENSES SECTION WITH RECEIPT IMAGES (Agency pays these)
             expenses = prop.get('expenses', [])
             if expenses:
-                elements.append(Paragraph("💰 Expenses with Receipts", header_style))
+                elements.append(Paragraph("💰 Expenses Paid by Agency (with Receipts)", header_style))
                 
                 for expense in expenses:
                     # Expense details table
@@ -262,7 +263,7 @@ class FinancialReportService:
             
             # Add message if no expenses
             if not expenses:
-                elements.append(Paragraph("No expenses recorded for this property", styles['Normal']))
+                elements.append(Paragraph("No expenses recorded for this property (agency pays all expenses)", styles['Normal']))
                 elements.append(Spacer(1, 0.2*inch))
             
             elements.append(Spacer(1, 0.2*inch))
@@ -309,7 +310,7 @@ class FinancialReportService:
             ]))
             elements.append(full_booking_table)
         
-        # COMPLETE EXPENSES LIST SECTION (only if there are expenses)
+        # COMPLETE EXPENSES LIST SECTION (agency expenses)
         all_expenses = []
         for prop in properties_data:
             all_expenses.extend(prop.get('expenses', []))
@@ -317,7 +318,7 @@ class FinancialReportService:
         if all_expenses:
             elements.append(Spacer(1, 0.3*inch))
             elements.append(PageBreak())
-            elements.append(Paragraph("💰 Complete Expenses List", header_style))
+            elements.append(Paragraph("💰 Complete Expenses List (Paid by Agency)", header_style))
             
             full_expense_table_data = [['Property', 'Category', 'Description', 'Date', 'Amount (DH)']]
             for prop in properties_data:

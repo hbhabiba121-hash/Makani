@@ -1,4 +1,4 @@
-# backend/reports/views.py - COMPLETE FIXED VERSION WITH OWNER_ID SUPPORT
+# backend/reports/views.py - COMPLETE FIXED VERSION WITH MODEL B LOGIC
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -19,6 +19,7 @@ def get_month_name(month):
               'July', 'August', 'September', 'October', 'November', 'December']
     return months[month - 1] if 1 <= month <= 12 else 'Unknown'
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_reports(request):
@@ -32,7 +33,7 @@ def get_reports(request):
     month = request.GET.get('month')
     year = request.GET.get('year')
     
-    # Build query
+    # Build query - filter based on user role
     reports = Report.objects.all()
     
     # Filter by report_scope
@@ -54,45 +55,14 @@ def get_reports(request):
     if year:
         reports = reports.filter(year=year)
     
-    # For owner users, only show reports for their properties OR reports with null property that belong to them
+    # For owner users, only show reports for their properties
     if user.role == 'owner':
         owner_properties = Property.objects.filter(owner__user=user)
-        owner_property_ids = list(owner_properties.values_list('id', flat=True))
-        
-        # Show reports that either:
-        # 1. Have a property that belongs to the owner
-        # 2. Have null property (all properties report) but the report was generated for this owner
-        #    (check if the report name contains owner name or details reference owner)
-        reports = reports.filter(
-            Q(property__in=owner_properties) |  # Report for specific property they own
-            Q(property__isnull=True)  # Report for all properties (could be owner-specific)
-        )
-        
-        # Additional filtering: For null property reports, we need to check if they belong to this owner
-        # This requires checking the report details JSON or name
-        filtered_reports = []
-        for report in reports:
-            if report.property is not None:
-                # Property exists, already filtered by Q above
-                filtered_reports.append(report)
-            else:
-                # Null property - check if this report belongs to this owner
-                # Check report name or details for owner reference
-                details = report.details or {}
-                properties_in_report = details.get('properties', [])
-                
-                # If any property in the report belongs to this owner, include it
-                owner_property_ids_set = set(owner_property_ids)
-                report_property_ids = [p.get('id') for p in properties_in_report]
-                
-                if any(pid in owner_property_ids_set for pid in report_property_ids):
-                    filtered_reports.append(report)
-        
-        reports = filtered_reports
+        reports = reports.filter(property__in=owner_properties)
     
-    reports = sorted(reports, key=lambda x: x.created_at, reverse=True)
+    reports = reports.order_by('-created_at')
     
-    # Serialize data
+    # Serialize data using new field names
     reports_data = []
     for report in reports:
         if report.report_scope == 'agency':
@@ -114,7 +84,7 @@ def get_reports(request):
             'month': report.month,
             'year': report.year,
             'property_id': report.property.id if report.property else None,
-            'property_name': report.property.name if report.property else 'All Your Properties',
+            'property_name': report.property.name if report.property else 'All Properties',
             'total_revenue': total_revenue,
             'total_commission': total_commission,
             'total_expenses': total_expenses,
@@ -140,7 +110,7 @@ def generate_report(request):
         report_type = request.data.get('report_type', 'monthly')
         report_scope = request.data.get('report_scope', 'agency')
         property_id = request.data.get('property_id')
-        owner_id = request.data.get('owner_id')  # NEW: owner_id parameter
+        owner_id = request.data.get('owner_id')
         month = request.data.get('month')
         year = request.data.get('year')
         
@@ -161,7 +131,6 @@ def generate_report(request):
         # Get properties based on selection and user role
         selected_owner = None
         
-        # NEW: Handle owner_id first
         if owner_id:
             from owners.models import Owner
             try:
@@ -197,6 +166,8 @@ def generate_report(request):
         property_details = []
         
         if report_scope == 'agency':
+            # AGENCY REPORT: Agency pays ALL expenses
+            # Agency profit = Commission - Expenses
             total_commission = 0
             total_expenses = 0
             
@@ -214,7 +185,7 @@ def generate_report(request):
                 
                 prop_commission = sum(float(r.get_commission()) for r in records)
                 prop_expenses = sum(float(e.amount) for e in expenses)
-                prop_profit = prop_commission - prop_expenses
+                prop_profit = prop_commission - prop_expenses  # Agency profit
                 
                 bookings = []
                 for record in records:
@@ -258,7 +229,7 @@ def generate_report(request):
             
             agency_net_profit = total_commission - total_expenses
             
-            # Generate report name based on scope
+            # Generate report name
             if owner_id and selected_owner:
                 owner_name = f"{selected_owner.user.first_name} {selected_owner.user.last_name}".strip()
                 if report_type == 'monthly':
@@ -325,10 +296,11 @@ def generate_report(request):
                 'report_scope': 'agency'
             }, status=201)
             
-        else:  # OWNER REPORT
+        else:  # OWNER REPORT - MODEL B: Agency pays ALL expenses, Owner only pays commission
+            # Owner profit = Revenue - Commission (expenses are NOT deducted)
             total_revenue = 0
             total_commission = 0
-            total_expenses = 0
+            total_expenses = 0  # Tracked for agency reference only, NOT deducted from owner profit
             
             for prop in properties:
                 if report_type == 'monthly':
@@ -344,8 +316,11 @@ def generate_report(request):
                 
                 prop_revenue = sum(float(r.revenue) for r in records)
                 prop_commission = sum(float(r.get_commission()) for r in records)
-                prop_expenses = sum(float(e.amount) for e in expenses)
-                prop_profit = prop_revenue - prop_commission - prop_expenses
+                prop_expenses = sum(float(e.amount) for e in expenses)  # Agency pays these
+                
+                # FIXED MODEL B: Owner profit = Revenue - Commission ONLY
+                # Expenses are paid by agency, so they don't affect owner profit
+                prop_profit = prop_revenue - prop_commission
                 
                 bookings = []
                 for record in records:
@@ -376,8 +351,8 @@ def generate_report(request):
                     'location': getattr(prop, 'location', 'N/A'),
                     'total_revenue': prop_revenue,
                     'total_commission': prop_commission,
-                    'total_expenses': prop_expenses,
-                    'net_profit': prop_profit,
+                    'total_expenses': prop_expenses,  # For information only
+                    'net_profit': prop_profit,  # FIXED: No expenses deducted
                     'bookings': bookings,
                     'expenses': expense_details,
                     'booking_count': len(bookings),
@@ -388,9 +363,10 @@ def generate_report(request):
                 total_commission += prop_commission
                 total_expenses += prop_expenses
             
-            owner_net_profit = total_revenue - total_commission - total_expenses
+            # FIXED MODEL B: Owner net profit = Revenue - Commission ONLY
+            owner_net_profit = total_revenue - total_commission
             
-            # Generate report name based on scope
+            # Generate report name
             if owner_id and selected_owner:
                 owner_name = f"{selected_owner.user.first_name} {selected_owner.user.last_name}".strip()
                 if report_type == 'monthly':
@@ -420,8 +396,8 @@ def generate_report(request):
                 'summary': {
                     'total_revenue': total_revenue,
                     'total_commission': total_commission,
-                    'total_expenses': total_expenses,
-                    'net_profit': owner_net_profit
+                    'total_expenses': total_expenses,  # For information only
+                    'net_profit': owner_net_profit  # FIXED: Revenue - Commission
                 },
                 'properties': property_details
             }
