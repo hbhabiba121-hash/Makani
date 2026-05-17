@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Mail, Phone, Building2, MoreVertical, Users, Loader2, X, Edit, Trash2, Eye, Copy } from "lucide-react";
+import { 
+  Plus, Mail, Phone, Building2, MoreVertical, Users, Loader2, X, Edit, Trash2, 
+  Eye, Copy, Search, ChevronRight, User, MapPin, Calendar, DollarSign 
+} from "lucide-react";
 import api from "@/lib/axios";
 
 interface Owner {
@@ -45,6 +48,7 @@ export default function OwnersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [showMenu, setShowMenu] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -54,7 +58,6 @@ export default function OwnersPage() {
   const fetchOwners = async () => {
     try {
       setLoading(true);
-      // Fetch all owners first
       const ownersRes = await api.get("/api/owners/");
       const ownersData = Array.isArray(ownersRes.data) ? ownersRes.data : ownersRes.data.results ?? [];
       
@@ -64,7 +67,6 @@ export default function OwnersPage() {
         return;
       }
 
-      // Fetch ALL properties in one request (or paginated if needed)
       let allProperties: Property[] = [];
       try {
         const propertiesRes = await api.get("/api/properties/");
@@ -73,7 +75,6 @@ export default function OwnersPage() {
           : propertiesRes.data.results ?? [];
       } catch (propError) {
         console.error("Error fetching properties:", propError);
-        // If properties fetch fails, still show owners without stats
         setOwners(ownersData.map((owner: Owner) => ({
           ...owner,
           properties_count: 0,
@@ -83,7 +84,6 @@ export default function OwnersPage() {
         return;
       }
 
-      // Calculate stats for each owner by filtering properties
       const ownersWithStats = ownersData.map((owner: Owner) => {
         const ownerProperties = allProperties.filter(
           (property: Property) => property.owner === owner.id
@@ -105,7 +105,6 @@ export default function OwnersPage() {
       setOwners(ownersWithStats);
     } catch (err) {
       console.error("Error fetching owners:", err);
-      // Show error to user
       setOwners([]);
     } finally {
       setLoading(false);
@@ -113,17 +112,13 @@ export default function OwnersPage() {
   };
 
   useEffect(() => {
-  const load = async () => {
-    await fetchOwners();
-  };
-
-  load();
-}, []);
+    fetchOwners();
+  }, []);
 
   const handleSubmit = async () => {
     setFormError("");
     if (!form.full_name || !form.email) {
-      setFormError("Please fill all required fields.");
+      setFormError("Veuillez remplir tous les champs obligatoires.");
       return;
     }
     const parts = form.full_name.trim().split(" ");
@@ -133,7 +128,6 @@ export default function OwnersPage() {
     setSubmitting(true);
     try {
       if (selectedOwner) {
-        // UPDATE - Use PUT request
         await api.put(`/api/owners/${selectedOwner.id}/`, {
           first_name,
           last_name,
@@ -142,7 +136,6 @@ export default function OwnersPage() {
           address: form.address,
         });
       } else {
-        // CREATE - Use POST request
         const response = await api.post("/api/owners/", {
           first_name,
           last_name,
@@ -151,7 +144,6 @@ export default function OwnersPage() {
           address: form.address,
         });
         
-        // Show password modal only for new owners
         if (response.data.temp_password) {
           setNewOwnerPassword(response.data.temp_password);
           setNewOwnerEmail(form.email);
@@ -172,7 +164,7 @@ export default function OwnersPage() {
       } else if (error.response?.data?.detail) {
         setFormError(error.response.data.detail);
       } else {
-        setFormError("Something went wrong. Please try again.");
+        setFormError("Une erreur est survenue. Veuillez réessayer.");
       }
     } finally {
       setSubmitting(false);
@@ -189,7 +181,7 @@ export default function OwnersPage() {
       fetchOwners();
     } catch (err) {
       console.error("Delete error:", err);
-      alert("Failed to delete owner. Make sure they have no properties assigned.");
+      alert("Échec de la suppression. Vérifiez qu'aucun bien n'est assigné.");
     } finally {
       setSubmitting(false);
     }
@@ -215,7 +207,6 @@ export default function OwnersPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert("Password copied to clipboard!");
   };
 
   const getInitials = (name: string) => {
@@ -223,206 +214,241 @@ export default function OwnersPage() {
   };
 
   const avatarColors = [
-    "bg-purple-100 text-purple-700",
-    "bg-blue-100 text-blue-700",
-    "bg-green-100 text-green-700",
-    "bg-orange-100 text-orange-700",
-    "bg-pink-100 text-pink-700",
+    "bg-[#e0e7ff] text-[#6366f1]",
+    "bg-[#dbeafe] text-[#3b82f6]",
+    "bg-[#d1fae5] text-[#10b981]",
+    "bg-[#ffedd5] text-[#f97316]",
+    "bg-[#fce7f3] text-[#ec4899]",
   ];
 
-  const inputClass = "w-full p-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#581c87]/20 focus:border-[#581c87] text-gray-900 bg-gray-50 focus:bg-white transition-all text-sm";
+  const inputClass = "w-full p-2.5 rounded-lg border border-[#e2e8f0] focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] text-[#334155] bg-[#f8fafc] focus:bg-white transition-all text-[13px] font-medium";
+
+  const filteredOwners = owners.filter(o => 
+    o.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    o.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    o.phone?.includes(searchQuery)
+  );
 
   const totalOwners = owners.length;
   const totalPropertiesManaged = owners.reduce((sum, o) => sum + (o.properties_count || 0), 0);
   const totalPayouts = owners.reduce((sum, o) => sum + (o.total_earnings || 0), 0);
 
+  const stats = [
+    { label: "Propriétaires", value: totalOwners, icon: Users, accent: "#6366f1" },
+    { label: "Biens gérés", value: totalPropertiesManaged, icon: Building2, accent: "#10b981" },
+    { label: "Revenus (YTD)", value: `${totalPayouts.toLocaleString()} MAD`, icon: DollarSign, accent: "#581c87" },
+  ];
+
   return (
-    <div className="p-8 bg-[#f9fafb] min-h-screen">
+    <div className="min-h-screen bg-[#f4f7f6]">
+      <div className="p-4 max-w-[1280px] mx-auto">
 
-      {/* Header */}
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Property Owners</h1>
-          <p className="text-gray-500">Manage property owner information and contacts</p>
-        </div>
-        <button
-          onClick={() => { setSelectedOwner(null); setForm(emptyForm); setShowModal(true); }}
-          className="flex items-center gap-2 bg-[#581c87] text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-[#4c1d95] transition-all shadow-lg shadow-[#581c87]/20"
-        >
-          <Plus size={18} />
-          Add Owner
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <p className="text-sm text-gray-500 font-medium mb-2">Total Owners</p>
-          <p className="text-3xl font-bold text-gray-900">{totalOwners}</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <p className="text-sm text-gray-500 font-medium mb-2">Total Properties Managed</p>
-          <p className="text-3xl font-bold text-gray-900">{totalPropertiesManaged}</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <p className="text-sm text-gray-500 font-medium mb-2">Total Payouts (YTD)</p>
-          <p className="text-3xl font-bold text-[#581c87]">{totalPayouts.toLocaleString()} MAD</p>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-gray-50">
-          <h2 className="font-bold text-gray-900 text-lg">All Owners</h2>
+        {/* Action Button */}
+        <div className="mb-4 flex justify-end">
+          <button
+            onClick={() => { setSelectedOwner(null); setForm(emptyForm); setShowModal(true); }}
+            className="flex items-center gap-1.5 bg-[#10b981] text-white px-4 py-2 rounded-lg text-[12px] font-semibold hover:bg-[#059669] transition-all shadow-[0_1px_2px_rgba(16,185,129,0.25)]"
+          >
+            <Plus size={14} />
+            Ajouter
+          </button>
         </div>
 
-        {loading ? (
-          <div className="divide-y divide-gray-50">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="px-6 py-4 flex items-center gap-4 animate-pulse">
-                <div className="w-10 h-10 rounded-full bg-gray-100" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-gray-100 rounded w-40" />
-                  <div className="h-3 bg-gray-100 rounded w-56" />
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+          {stats.map((s, i) => (
+            <div key={i} className="bg-white rounded-xl border border-[#e2e8f0] p-4 hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-shadow">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] text-[#64748b] font-medium">{s.label}</p>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: s.accent + "12" }}>
+                  <s.icon size={14} style={{ color: s.accent }} />
                 </div>
               </div>
-            ))}
+              <p className="text-[22px] font-bold text-[#1e293b] tracking-tight">{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
+            <input
+              type="text"
+              placeholder="Rechercher un propriétaire..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full sm:w-[320px] pl-9 pr-3 py-2 bg-white border border-[#e2e8f0] rounded-lg text-[13px] text-[#334155] placeholder-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] transition-all"
+            />
           </div>
-        ) : owners.length === 0 ? (
-          <div className="text-center py-20 text-gray-400">
-            <Users size={48} className="mx-auto mb-4 opacity-30" />
-            <p className="text-lg font-medium">No owners found</p>
-            <p className="text-sm">Add your first owner to get started</p>
-          </div>
-        ) : (
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 text-gray-400 text-[12px] uppercase tracking-wider">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Owner</th>
-                <th className="px-6 py-4 font-semibold">Contact</th>
-                <th className="px-6 py-4 font-semibold">Properties</th>
-                <th className="px-6 py-4 font-semibold">Total Earnings</th>
-                <th className="px-6 py-4 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {owners.map((owner, i) => (
-                <tr key={owner.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${avatarColors[i % avatarColors.length]}`}>
-                        {getInitials(owner.full_name)}
-                      </div>
-                      <span className="font-semibold text-gray-900">{owner.full_name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="flex items-center gap-1.5 text-sm text-gray-500">
-                        <Mail size={13} /> {owner.email}
-                      </span>
-                      <span className="flex items-center gap-1.5 text-sm text-gray-500">
-                        <Phone size={13} /> {owner.phone || "—"}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                      <Building2 size={14} />
-                      <span>{owner.properties_count || 0} properties</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 font-bold text-[#581c87]">
-                    {(owner.total_earnings || 0).toLocaleString()} MAD
-                  </td>
-                  <td className="px-6 py-4 relative">
-                    <button 
-                      onClick={() => setShowMenu(showMenu === owner.id ? null : owner.id)}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <MoreVertical size={18} />
-                    </button>
-                    {showMenu === owner.id && (
-                      <div className="absolute right-0 mt-2 w-36 bg-white rounded-xl shadow-lg border border-gray-100 z-10">
-                        <button
-                          onClick={() => handleViewDetails(owner)}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-t-xl flex items-center gap-2"
-                        >
-                          <Eye size={14} /> View Details
-                        </button>
-                        <button
-                          onClick={() => handleEdit(owner)}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                        >
-                          <Edit size={14} /> Edit
-                        </button>
-                        <button
-                          onClick={() => { setSelectedOwner(owner); setShowDeleteModal(true); setShowMenu(null); }}
-                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-b-xl flex items-center gap-2"
-                        >
-                          <Trash2 size={14} /> Delete
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
+          {loading ? (
+            <div className="divide-y divide-[#f1f5f9]">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="px-4 py-4 flex items-center gap-4 animate-pulse">
+                  <div className="w-10 h-10 rounded-full bg-[#f1f5f9]" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 bg-[#f1f5f9] rounded w-32" />
+                    <div className="h-2.5 bg-[#f1f5f9] rounded w-48" />
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        )}
+            </div>
+          ) : filteredOwners.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-12 h-12 bg-[#f1f5f9] rounded-xl flex items-center justify-center mx-auto mb-3">
+                <Users size={22} className="text-[#94a3b8]" />
+              </div>
+              <p className="text-[14px] font-semibold text-[#334155]">Aucun propriétaire trouvé</p>
+              <p className="text-[12px] text-[#94a3b8] mt-0.5">Ajoutez votre premier propriétaire</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#e2e8f0]">
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Propriétaire</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#64748b] uppercase tracking-wider hidden sm:table-cell">Contact</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#64748b] uppercase tracking-wider hidden md:table-cell">Biens</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Revenus</th>
+                    <th className="text-right px-4 py-3 text-[11px] font-semibold text-[#64748b] uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f1f5f9]">
+                  {filteredOwners.map((owner, i) => (
+                    <tr key={owner.id} className="hover:bg-[#f8fafc] transition-colors cursor-pointer" onClick={() => handleViewDetails(owner)}>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-[11px] font-bold ${avatarColors[i % avatarColors.length]}`}>
+                            {getInitials(owner.full_name)}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-[#1e293b] text-[13px] block">{owner.full_name}</span>
+                            <span className="text-[10px] text-[#94a3b8] sm:hidden">{owner.email}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 hidden sm:table-cell">
+                        <div className="flex flex-col gap-1">
+                          <span className="flex items-center gap-1.5 text-[12px] text-[#64748b]">
+                            <Mail size={12} /> <span className="truncate max-w-[140px]">{owner.email}</span>
+                          </span>
+                          <span className="flex items-center gap-1.5 text-[12px] text-[#64748b]">
+                            <Phone size={12} /> {owner.phone || "—"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 hidden md:table-cell">
+                        <div className="flex items-center gap-1.5 text-[12px] text-[#64748b]">
+                          <Building2 size={13} />
+                          <span>{owner.properties_count || 0} biens</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="font-bold text-[#10b981] text-[13px]">
+                          {(owner.total_earnings || 0).toLocaleString()} MAD
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <button 
+                            onClick={() => setShowMenu(showMenu === owner.id ? null : owner.id)}
+                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[#f1f5f9] text-[#64748b] transition-colors"
+                          >
+                            <MoreVertical size={13} />
+                          </button>
+                          {showMenu === owner.id && (
+                            <>
+                              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(null)} />
+                              <div className="absolute right-0 mt-1 w-40 bg-white rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.08)] border border-[#e2e8f0] z-20 overflow-hidden">
+                                <button
+                                  onClick={() => handleViewDetails(owner)}
+                                  className="w-full text-left px-3.5 py-2 text-[12px] text-[#334155] hover:bg-[#f8fafc] flex items-center gap-2"
+                                >
+                                  <Eye size={13} /> Détails
+                                </button>
+                                <button
+                                  onClick={() => handleEdit(owner)}
+                                  className="w-full text-left px-3.5 py-2 text-[12px] text-[#334155] hover:bg-[#f8fafc] flex items-center gap-2"
+                                >
+                                  <Edit size={13} /> Modifier
+                                </button>
+                                <button
+                                  onClick={() => { setSelectedOwner(owner); setShowDeleteModal(true); setShowMenu(null); }}
+                                  className="w-full text-left px-3.5 py-2 text-[12px] text-[#ef4444] hover:bg-[#fef2f2] flex items-center gap-2"
+                                >
+                                  <Trash2 size={13} /> Supprimer
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
       </div>
 
       {/* Password Display Modal */}
       {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md transform transition-all">
-            <div className="p-8">
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] w-full max-w-md">
+            <div className="p-5">
+              <div className="text-center mb-5">
+                <div className="w-12 h-12 bg-[#d1fae5] rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-[#10b981]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Owner Created Successfully!</h2>
-                <p className="text-gray-500 mt-2">Here are the login credentials</p>
+                <h2 className="text-[16px] font-bold text-[#1e293b]">Propriétaire ajouté !</h2>
+                <p className="text-[12px] text-[#64748b] mt-1">Voici les identifiants de connexion</p>
               </div>
 
-              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+              <div className="bg-[#f8fafc] rounded-xl p-4 mb-4 border border-[#e2e8f0]">
                 <div className="mb-3">
-                  <label className="text-xs text-gray-500 font-medium">Name</label>
-                  <p className="text-gray-900 font-semibold">{newOwnerName}</p>
+                  <label className="text-[10px] text-[#64748b] font-medium">Nom</label>
+                  <p className="text-[#1e293b] font-semibold text-[13px]">{newOwnerName}</p>
                 </div>
                 <div className="mb-3">
-                  <label className="text-xs text-gray-500 font-medium">Email</label>
-                  <p className="text-gray-900 font-semibold">{newOwnerEmail}</p>
+                  <label className="text-[10px] text-[#64748b] font-medium">Email</label>
+                  <p className="text-[#1e293b] font-semibold text-[13px]">{newOwnerEmail}</p>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 font-medium">Temporary Password</label>
+                  <label className="text-[10px] text-[#64748b] font-medium">Mot de passe temporaire</label>
                   <div className="flex items-center gap-2 mt-1">
-                    <code className="flex-1 bg-white px-3 py-2 rounded-lg text-sm font-mono text-[#581c87] border border-gray-200">
+                    <code className="flex-1 bg-white px-3 py-2 rounded-lg text-[12px] font-mono text-[#10b981] border border-[#e2e8f0]">
                       {newOwnerPassword}
                     </code>
                     <button
                       onClick={() => copyToClipboard(newOwnerPassword)}
-                      className="p-2 bg-[#581c87] text-white rounded-lg hover:bg-[#4c1d95] transition-all"
+                      className="p-2 bg-[#10b981] text-white rounded-lg hover:bg-[#059669] transition-all"
+                      title="Copier"
                     >
-                      <Copy size={18} />
+                      <Copy size={14} />
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
-                <p className="text-sm text-yellow-800">
-                  ⚠️ Please share these credentials with the owner. They can change their password after first login.
+              <div className="bg-[#fff7ed] border border-[#fed7aa] rounded-xl p-3 mb-5">
+                <p className="text-[11px] text-[#c2410c]">
+                  ⚠️ Partagez ces identifiants avec le propriétaire. Il pourra changer son mot de passe après sa première connexion.
                 </p>
               </div>
 
               <button
                 onClick={() => setShowPasswordModal(false)}
-                className="w-full py-3 rounded-xl bg-[#581c87] text-white font-semibold hover:bg-[#4c1d95] transition-all"
+                className="w-full py-2.5 rounded-lg bg-[#10b981] text-white font-semibold hover:bg-[#059669] transition-all text-[13px]"
               >
-                Done
+                Terminé
               </button>
             </div>
           </div>
@@ -431,78 +457,51 @@ export default function OwnersPage() {
 
       {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg">
-            <div className="p-8">
-              <div className="flex justify-between items-start mb-6">
+        <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-5">
+              <div className="flex justify-between items-start mb-5">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">{selectedOwner ? "Edit Owner" : "Add New Owner"}</h2>
-                  <p className="text-sm text-gray-400 mt-1">{selectedOwner ? "Update owner information" : "Enter the details of the new property owner"}</p>
+                  <h2 className="text-[16px] font-bold text-[#1e293b]">{selectedOwner ? "Modifier le propriétaire" : "Ajouter un propriétaire"}</h2>
+                  <p className="text-[12px] text-[#94a3b8] mt-0.5">{selectedOwner ? "Mettre à jour les informations" : "Nouveau propriétaire"}</p>
                 </div>
-                <button onClick={() => { setShowModal(false); setForm(emptyForm); setSelectedOwner(null); setFormError(""); }} className="text-gray-400 hover:text-gray-600">
-                  <X size={22} />
+                <button onClick={() => { setShowModal(false); setForm(emptyForm); setSelectedOwner(null); setFormError(""); }} className="text-[#94a3b8] hover:text-[#334155] transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#f1f5f9]">
+                  <X size={18} />
                 </button>
               </div>
 
               {formError && (
-                <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl mb-4 border border-red-100">
+                <div className="bg-[#fef2f2] text-[#ef4444] text-[12px] p-3 rounded-lg mb-4 border border-[#fecaca] flex items-center gap-2">
+                  <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   {formError}
                 </div>
               )}
 
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Full Name *</label>
-                  <input
-                    className={inputClass}
-                    placeholder="Youssef Benali"
-                    value={form.full_name}
-                    onChange={e => setForm({ ...form, full_name: e.target.value })}
-                  />
+                  <label className="text-[12px] font-semibold text-[#334155] mb-1 block">Nom complet *</label>
+                  <input className={inputClass} placeholder="Youssef Benali" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Email Address *</label>
-                  <input
-                    type="email"
-                    className={inputClass}
-                    placeholder="youssef.benali@email.ma"
-                    value={form.email}
-                    onChange={e => setForm({ ...form, email: e.target.value })}
-                  />
+                  <label className="text-[12px] font-semibold text-[#334155] mb-1 block">Email *</label>
+                  <input type="email" className={inputClass} placeholder="youssef@email.ma" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Phone Number</label>
-                  <input
-                    className={inputClass}
-                    placeholder="+212 6 12 34 56 78"
-                    value={form.phone}
-                    onChange={e => setForm({ ...form, phone: e.target.value })}
-                  />
+                  <label className="text-[12px] font-semibold text-[#334155] mb-1 block">Téléphone</label>
+                  <input className={inputClass} placeholder="+212 6 12 34 56 78" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold text-gray-700 mb-1.5 block">Address</label>
-                  <input
-                    className={inputClass}
-                    placeholder="Casablanca, Morocco"
-                    value={form.address}
-                    onChange={e => setForm({ ...form, address: e.target.value })}
-                  />
+                  <label className="text-[12px] font-semibold text-[#334155] mb-1 block">Adresse</label>
+                  <input className={inputClass} placeholder="Casablanca, Maroc" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => { setShowModal(false); setForm(emptyForm); setSelectedOwner(null); setFormError(""); }}
-                  className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-all"
-                >
-                  Cancel
+              <div className="flex gap-2.5 mt-5 pt-4 border-t border-[#f1f5f9]">
+                <button onClick={() => { setShowModal(false); setForm(emptyForm); setSelectedOwner(null); setFormError(""); }} className="flex-1 py-2.5 rounded-lg border border-[#e2e8f0] text-[#64748b] font-semibold hover:bg-[#f8fafc] transition-all text-[13px]">
+                  Annuler
                 </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="flex-1 py-3 rounded-xl bg-[#581c87] text-white font-semibold hover:bg-[#4c1d95] transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#581c87]/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {submitting ? <Loader2 className="animate-spin" size={18} /> : (selectedOwner ? "Update Owner" : "Add Owner")}
+                <button onClick={handleSubmit} disabled={submitting} className="flex-1 py-2.5 rounded-lg bg-[#10b981] text-white font-semibold hover:bg-[#059669] transition-all flex items-center justify-center gap-1.5 shadow-[0_1px_2px_rgba(16,185,129,0.25)] text-[13px]">
+                  {submitting ? <Loader2 className="animate-spin" size={16} /> : (selectedOwner ? "Mettre à jour" : "Ajouter")}
                 </button>
               </div>
             </div>
@@ -512,31 +511,31 @@ export default function OwnersPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && selectedOwner && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
-            <div className="p-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Owner</h2>
-              <p className="text-gray-500 mb-6">
-                Are you sure you want to delete &quot;{selectedOwner.full_name}&quot;? This action cannot be undone.
-                {selectedOwner.properties_count && selectedOwner.properties_count > 0 && (
-                  <span className="block mt-2 text-red-500">
-                    Warning: This owner has {selectedOwner.properties_count} properties. Please reassign or delete them first.
+        <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] w-full max-w-sm">
+            <div className="p-5">
+              <div className="w-10 h-10 bg-[#fef2f2] rounded-xl flex items-center justify-center mx-auto mb-3">
+                <Trash2 size={18} className="text-[#ef4444]" />
+              </div>
+              <h2 className="text-[16px] font-bold text-[#1e293b] text-center mb-1">Supprimer</h2>
+              <p className="text-[#64748b] text-[13px] text-center mb-5">
+                Supprimer <span className="font-semibold text-[#1e293b]">"{selectedOwner.full_name}"</span> ? Action irréversible.
+                {selectedOwner.properties_count !== undefined && selectedOwner.properties_count > 0 && (
+                  <span className="block mt-2 text-[#ef4444] text-[11px]">
+                    ⚠️ Ce propriétaire a {selectedOwner.properties_count} bien(s). Réassignez-les d'abord.
                   </span>
                 )}
               </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-all"
-                >
-                  Cancel
+              <div className="flex gap-2.5">
+                <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-2.5 rounded-lg border border-[#e2e8f0] text-[#64748b] font-semibold hover:bg-[#f8fafc] transition-all text-[13px]">
+                  Annuler
                 </button>
                 <button
                   onClick={handleDelete}
                   disabled={submitting || (selectedOwner.properties_count !== undefined && selectedOwner.properties_count > 0)}
-                  className="flex-1 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2.5 rounded-lg bg-[#ef4444] text-white font-semibold hover:bg-[#dc2626] transition-all flex items-center justify-center gap-1.5 text-[13px] disabled:opacity-50"
                 >
-                  {submitting ? <Loader2 className="animate-spin" size={18} /> : "Delete"}
+                  {submitting ? <Loader2 className="animate-spin" size={16} /> : "Supprimer"}
                 </button>
               </div>
             </div>
@@ -546,69 +545,82 @@ export default function OwnersPage() {
 
       {/* Owner Details Modal */}
       {showDetailsModal && selectedOwner && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
-            <div className="p-8">
-              <div className="flex justify-between items-start mb-6">
-                <h2 className="text-xl font-bold text-gray-900">Owner Details</h2>
-                <button onClick={() => setShowDetailsModal(false)} className="text-gray-400 hover:text-gray-600">
-                  <X size={22} />
+        <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] w-full max-w-md">
+            <div className="p-5">
+              <div className="flex justify-between items-start mb-5">
+                <h2 className="text-[16px] font-bold text-[#1e293b]">Détails du propriétaire</h2>
+                <button onClick={() => setShowDetailsModal(false)} className="text-[#94a3b8] hover:text-[#334155] transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#f1f5f9]">
+                  <X size={18} />
                 </button>
               </div>
               
               <div className="space-y-4">
-                <div className="flex items-center gap-4 pb-4 border-b border-gray-100">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold ${avatarColors[0]}`}>
+                <div className="flex items-center gap-4 pb-4 border-b border-[#f1f5f9]">
+                  <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-[14px] font-bold ${avatarColors[0]}`}>
                     {getInitials(selectedOwner.full_name)}
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900 text-lg">{selectedOwner.full_name}</h3>
-                    <p className="text-sm text-gray-500">Owner since {new Date(selectedOwner.created_at).toLocaleDateString()}</p>
+                    <h3 className="font-bold text-[#1e293b] text-[15px]">{selectedOwner.full_name}</h3>
+                    <p className="text-[11px] text-[#64748b] flex items-center gap-1">
+                      <Calendar size={11} /> Depuis {new Date(selectedOwner.created_at).toLocaleDateString('fr-FR')}
+                    </p>
                   </div>
                 </div>
                 
                 <div>
-                  <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Contact Information</p>
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-2 font-medium">Contact</p>
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Mail size={16} className="text-gray-400" />
-                      <span className="text-gray-700">{selectedOwner.email}</span>
+                    <div className="flex items-center gap-2 text-[12px]">
+                      <Mail size={13} className="text-[#94a3b8]" />
+                      <span className="text-[#334155]">{selectedOwner.email}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Phone size={16} className="text-gray-400" />
-                      <span className="text-gray-700">{selectedOwner.phone || "Not provided"}</span>
+                    <div className="flex items-center gap-2 text-[12px]">
+                      <Phone size={13} className="text-[#94a3b8]" />
+                      <span className="text-[#334155]">{selectedOwner.phone || "Non renseigné"}</span>
                     </div>
+                    {selectedOwner.address && (
+                      <div className="flex items-start gap-2 text-[12px]">
+                        <MapPin size={13} className="text-[#94a3b8] mt-0.5" />
+                        <span className="text-[#334155]">{selectedOwner.address}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
-                {selectedOwner.address && (
-                  <div>
-                    <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Address</p>
-                    <p className="text-sm text-gray-700">{selectedOwner.address}</p>
-                  </div>
-                )}
-                
-                <div className="pt-4 border-t border-gray-100">
-                  <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Statistics</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-2xl font-bold text-gray-900">{selectedOwner.properties_count || 0}</p>
-                      <p className="text-xs text-gray-500">Properties</p>
+                <div className="pt-4 border-t border-[#f1f5f9]">
+                  <p className="text-[10px] text-[#64748b] uppercase tracking-wider mb-3 font-medium">Statistiques</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-[#f8fafc] rounded-xl p-3 border border-[#e2e8f0]">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Building2 size={14} className="text-[#6366f1]" />
+                        <p className="text-[10px] text-[#64748b]">Biens</p>
+                      </div>
+                      <p className="text-[20px] font-bold text-[#1e293b]">{selectedOwner.properties_count || 0}</p>
                     </div>
-                    <div>
-                      <p className="text-2xl font-bold text-[#581c87]">{(selectedOwner.total_earnings || 0).toLocaleString()} MAD</p>
-                      <p className="text-xs text-gray-500">Total Earnings</p>
+                    <div className="bg-[#f8fafc] rounded-xl p-3 border border-[#e2e8f0]">
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign size={14} className="text-[#10b981]" />
+                        <p className="text-[10px] text-[#64748b]">Revenus</p>
+                      </div>
+                      <p className="text-[20px] font-bold text-[#10b981]">{(selectedOwner.total_earnings || 0).toLocaleString()} MAD</p>
                     </div>
                   </div>
                 </div>
               </div>
               
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-2.5 mt-5 pt-4 border-t border-[#f1f5f9]">
+                <button
+                  onClick={() => { setShowDetailsModal(false); handleEdit(selectedOwner); }}
+                  className="flex-1 py-2.5 rounded-lg border border-[#e2e8f0] text-[#334155] font-semibold hover:bg-[#f8fafc] transition-all text-[13px] flex items-center justify-center gap-1.5"
+                >
+                  <Edit size={14} /> Modifier
+                </button>
                 <button
                   onClick={() => setShowDetailsModal(false)}
-                  className="flex-1 py-3 rounded-xl bg-[#581c87] text-white font-semibold hover:bg-[#4c1d95] transition-all"
+                  className="flex-1 py-2.5 rounded-lg bg-[#10b981] text-white font-semibold hover:bg-[#059669] transition-all text-[13px]"
                 >
-                  Close
+                  Fermer
                 </button>
               </div>
             </div>
