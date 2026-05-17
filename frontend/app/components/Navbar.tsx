@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Search, Bell, ChevronDown, Home, Users, Building2, DollarSign, X } from "lucide-react";
-import { useRouter } from "next/navigation";
-import api, { getCurrentUser } from "@/lib/axios";
+import { Bell, ChevronDown, LogOut, Settings, User } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { getCurrentUser } from "@/lib/axios";
 
-interface User {
+interface UserType {
   id: number;
   email: string;
   first_name: string;
@@ -14,358 +14,356 @@ interface User {
   role: string;
 }
 
-interface SearchResult {
-  id: number;
-  title: string;
-  subtitle: string;
-  type: "property" | "owner" | "revenue";
-  href: string;
-  icon: React.ReactNode;
+// ── i18n ──────────────────────────────────────────────────────
+const i18n = {
+  fr: {
+    pages: {
+      "/dashboard":              { title: "Dashboard",       sub: "Obtenez un aperçu complet de vos performances." },
+      "/dashboard/properties":   { title: "Propriétés",      sub: "Gérez toutes vos propriétés en un seul endroit." },
+      "/dashboard/owners":       { title: "Propriétaires",   sub: "Suivez et gérez les propriétaires bailleurs." },
+      "/dashboard/staff":        { title: "Staff",           sub: "Gérez votre équipe et leurs accès." },
+      "/dashboard/revenue":      { title: "Revenus",         sub: "Suivez vos revenus et commissions." },
+      "/dashboard/expenses":     { title: "Dépenses",        sub: "Contrôlez vos charges et dépenses." },
+      "/dashboard/analysis":     { title: "Analyse",         sub: "Visualisez les performances de votre portefeuille." },
+      "/dashboard/reports":      { title: "Rapports",        sub: "Exportez et consultez vos rapports financiers." },
+      "/dashboard/settings":     { title: "Paramètres",      sub: "Configurez votre espace de travail." },
+      "/dashboard/security":     { title: "Sécurité",        sub: "Gérez les accès et la sécurité." },
+      "/dashboard/help":         { title: "Centre d'aide",   sub: "Besoin d'aide ? Consultez notre documentation." },
+    } as Record<string, { title: string; sub: string }>,
+    profile:  "Mon profil",
+    settings: "Paramètres",
+    logout:   "Se déconnecter",
+    roles:    { admin: "Administrateur", owner: "Propriétaire", staff: "Staff" } as Record<string,string>,
+    lang:     "Langue",
+    fr:       "Français",
+    ar:       "العربية",
+  },
+  ar: {
+    pages: {
+      "/dashboard":              { title: "لوحة التحكم",   sub: "نظرة شاملة على أداء منصتك." },
+      "/dashboard/properties":   { title: "العقارات",      sub: "إدارة جميع عقاراتك في مكان واحد." },
+      "/dashboard/owners":       { title: "الملاك",        sub: "تتبع وإدارة ملاك العقارات." },
+      "/dashboard/staff":        { title: "الموظفون",      sub: "إدارة فريقك وصلاحياتهم." },
+      "/dashboard/revenue":      { title: "الإيرادات",     sub: "تتبع إيراداتك وعمولاتك." },
+      "/dashboard/expenses":     { title: "المصاريف",      sub: "راقب تكاليفك ومصاريفك." },
+      "/dashboard/analysis":     { title: "التحليل",       sub: "تحليل أداء محفظتك العقارية." },
+      "/dashboard/reports":      { title: "التقارير",      sub: "تصدير واستعراض تقاريرك المالية." },
+      "/dashboard/settings":     { title: "الإعدادات",     sub: "اضبط إعدادات مساحة عملك." },
+      "/dashboard/security":     { title: "الأمان",        sub: "إدارة الوصول والأمان." },
+      "/dashboard/help":         { title: "مركز المساعدة", sub: "تحتاج مساعدة؟ راجع التوثيق." },
+    } as Record<string, { title: string; sub: string }>,
+    profile:  "ملفي الشخصي",
+    settings: "الإعدادات",
+    logout:   "تسجيل الخروج",
+    roles:    { admin: "مدير", owner: "مالك", staff: "موظف" } as Record<string,string>,
+    lang:     "اللغة",
+    fr:       "Français",
+    ar:       "العربية",
+  },
+} as const;
+
+type Lang = "fr" | "ar";
+
+interface NavbarProps {
+  lang?: Lang;
+  onLangChange?: (l: Lang) => void;
 }
 
-interface Notification {
-  id: number;
-  message: string;
-  time: string;
-  read: boolean;
-  type: "info" | "warning" | "success";
-}
+export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
+  const [user, setUser]         = useState<UserType | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [dropOpen, setDropOpen] = useState(false);
+  const dropRef  = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const tx       = i18n[lang];
+  const isRTL    = lang === "ar";
 
-const staticNotifications: Notification[] = [
-  { id: 1, message: "New booking added for Medina Casa", time: "2 min ago", read: false, type: "success" },
-  { id: 2, message: "Expense record updated", time: "1 hour ago", read: false, type: "info" },
-  { id: 3, message: "Monthly report is ready", time: "3 hours ago", read: true, type: "info" },
-  { id: 4, message: "Owner payout due this week", time: "1 day ago", read: true, type: "warning" },
-];
+  const page = tx.pages[pathname] ?? { title: "Dashboard", sub: "" };
 
-export default function Navbar() {
-  const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Search states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
-
-  // Notifications states
-  const [notifications, setNotifications] = useState<Notification[]>(staticNotifications);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  // Close dropdowns on outside click
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setShowSearchResults(false);
-      }
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setShowNotifications(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    getCurrentUser().then((u) => { setUser(u); setLoading(false); });
   }, []);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      const userData = await getCurrentUser();
-      setUser(userData);
-      setLoading(false);
-    };
-    fetchUser();
-  }, []);
+    document.documentElement.setAttribute("dir", isRTL ? "rtl" : "ltr");
+    document.documentElement.setAttribute("lang", lang);
+  }, [lang, isRTL]);
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
-    }
+    const fn = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node))
+        setDropOpen(false);
+    };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, []);
 
-    const q = searchQuery.toLowerCase();
-    setSearchLoading(true);
-    setShowSearchResults(true);
-
-    const timer = setTimeout(async () => {
-      try {
-        const results: SearchResult[] = [];
-
-        // Search properties
-        const propsRes = await api.get("/api/properties/");
-        const props = Array.isArray(propsRes.data) ? propsRes.data : propsRes.data.results ?? [];
-        props
-          .filter((p: any) =>
-            p.name?.toLowerCase().includes(q) ||
-            p.location?.toLowerCase().includes(q)
-          )
-          .slice(0, 3)
-          .forEach((p: any) => {
-            results.push({
-              id: p.id,
-              title: p.name,
-              subtitle: p.location || "Property",
-              type: "property",
-              href: `/dashboard/properties/${p.id}`,
-              icon: <Home size={16} className="text-purple-600" />,
-            });
-          });
-
-        // Search owners
-        const ownersRes = await api.get("/api/owners/");
-        const owners = Array.isArray(ownersRes.data) ? ownersRes.data : ownersRes.data.results ?? [];
-        owners
-          .filter((o: any) =>
-            o.full_name?.toLowerCase().includes(q) ||
-            o.email?.toLowerCase().includes(q)
-          )
-          .slice(0, 3)
-          .forEach((o: any) => {
-            results.push({
-              id: o.id,
-              title: o.full_name,
-              subtitle: o.email || "Owner",
-              type: "owner",
-              href: `/dashboard/owners`,
-              icon: <Users size={16} className="text-blue-600" />,
-            });
-          });
-
-        setSearchResults(results);
-      } catch (err) {
-        console.error("Search error:", err);
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 400); // debounce 400ms
-
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  const handleResultClick = (href: string) => {
-    router.push(href);
-    setSearchQuery("");
-    setShowSearchResults(false);
-  };
-
-  const markAllRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const markOneRead = (id: number) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
-  };
-
-  const getInitials = () => {
+  const initials = () => {
     if (!user) return "AU";
-    if (user.first_name && user.last_name) {
-      return `${user.first_name.charAt(0)}${user.last_name.charAt(0)}`.toUpperCase();
-    }
-    return user.email.charAt(0).toUpperCase();
+    if (user.first_name && user.last_name)
+      return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase();
+    return user.email[0].toUpperCase();
   };
 
-  const getDisplayName = () => {
-    if (!user) return "Admin User";
-    if (user.full_name && user.full_name.trim() !== "") return user.full_name;
+  const displayName = () => {
+    if (!user) return "—";
+    if (user.full_name?.trim()) return user.full_name;
     if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
-    return user.email.split('@')[0];
+    return user.email.split("@")[0];
   };
-
-  const notifColor = (type: string) => {
-    switch (type) {
-      case "success": return "bg-green-100 text-green-600";
-      case "warning": return "bg-orange-100 text-orange-600";
-      default: return "bg-blue-100 text-blue-600";
-    }
-  };
-
-  if (loading) {
-    return (
-      <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-10">
-        <div className="relative w-96">
-          <span className="absolute inset-y-0 left-3 flex items-center text-gray-400">
-            <Search size={18} />
-          </span>
-          <input
-            type="text"
-            placeholder="Search properties, owners, records..."
-            className="w-full bg-gray-50 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none"
-            disabled
-          />
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse" />
-        </div>
-      </header>
-    );
-  }
 
   return (
-    <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-40">
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
 
-      {/* Search Bar */}
-      <div className="relative w-96" ref={searchRef}>
-        <span className="absolute inset-y-0 left-3 flex items-center text-gray-400 z-10">
-          {searchLoading
-            ? <div className="w-4 h-4 border-2 border-[#581c87] border-t-transparent rounded-full animate-spin" />
-            : <Search size={18} />
-          }
-        </span>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onFocus={() => searchQuery && setShowSearchResults(true)}
-          placeholder="Search properties, owners, records..."
-          className="w-full bg-gray-50 border border-transparent rounded-xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-[#581c87]/20 focus:border-[#581c87] transition-all outline-none"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => { setSearchQuery(""); setShowSearchResults(false); }}
-            className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600"
-          >
-            <X size={16} />
-          </button>
-        )}
+        .nb {
+          --green:      #22c55e;
+          --green-dim:  rgba(34,197,94,0.1);
+          --ink:        #111827;
+          --ink-2:      #374151;
+          --ink-3:      #9ca3af;
+          --ink-4:      #d1d5db;
+          --border:     #f3f4f6;
+          --border-2:   #e5e7eb;
+          --bg:         #f9fafb;
+          --surface:    #ffffff;
+          --f:          ${isRTL ? "'Cairo'" : "'Geist'"}, system-ui, sans-serif;
 
-        {/* Search Results Dropdown */}
-        {showSearchResults && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
-            {searchLoading ? (
-              <div className="p-4 text-center text-sm text-gray-400">Searching...</div>
-            ) : searchResults.length === 0 ? (
-              <div className="p-4 text-center text-sm text-gray-400">
-                No results for "<span className="font-medium text-gray-600">{searchQuery}</span>"
-              </div>
-            ) : (
-              <>
-                <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-50">
-                  Results ({searchResults.length})
-                </div>
-                {searchResults.map((result) => (
-                  <button
-                    key={`${result.type}-${result.id}`}
-                    onClick={() => handleResultClick(result.href)}
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left border-b border-gray-50 last:border-0"
-                  >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      result.type === "property" ? "bg-purple-50" :
-                      result.type === "owner" ? "bg-blue-50" : "bg-green-50"
-                    }`}>
-                      {result.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{result.title}</p>
-                      <p className="text-xs text-gray-400 truncate">{result.subtitle}</p>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      result.type === "property" ? "bg-purple-50 text-purple-600" :
-                      result.type === "owner" ? "bg-blue-50 text-blue-600" : "bg-green-50 text-green-600"
-                    }`}>
-                      {result.type}
-                    </span>
-                  </button>
-                ))}
-              </>
-            )}
+          font-family: var(--f);
+          direction: ${isRTL ? "rtl" : "ltr"};
+          position: sticky; top: 0; z-index: 50;
+          height: 64px;
+          background: var(--surface);
+          border-bottom: 1px solid var(--border-2);
+          display: flex; align-items: center;
+          /* Offset for sidebar width */
+          padding: 0 1.75rem;
+          gap: 1rem;
+        }
+
+        /* Page title */
+        .nb-title { flex: 1; }
+        .nb-title-h {
+          font-size: 19px; font-weight: 700;
+          color: var(--ink);
+          letter-spacing: -0.02em;
+          line-height: 1.15;
+        }
+        .nb-title-sub {
+          font-size: 12px; font-weight: 300;
+          color: var(--ink-3); margin-top: 1px;
+        }
+
+        /* Right cluster */
+        .nb-right {
+          display: flex; align-items: center; gap: 6px;
+          margin-${isRTL ? "right" : "left"}: auto;
+        }
+
+        /* Lang toggle — pill like the image's Week/Month toggle */
+        .nb-lang {
+          display: flex; align-items: center;
+          border: 1px solid var(--border-2);
+          border-radius: 8px;
+          overflow: hidden;
+          margin-${isRTL ? "left" : "right"}: 4px;
+        }
+        .nb-lang-btn {
+          padding: 5px 11px;
+          font-size: 12px; font-weight: 500;
+          font-family: var(--f);
+          border: none; background: none;
+          color: var(--ink-3); cursor: pointer;
+          transition: background 0.12s, color 0.12s;
+          line-height: 1;
+        }
+        .nb-lang-btn:first-child {
+          border-${isRTL ? "left" : "right"}: 1px solid var(--border-2);
+        }
+        .nb-lang-btn.on {
+          background: var(--green);
+          color: #fff;
+        }
+        .nb-lang-btn:not(.on):hover { background: var(--bg); color: var(--ink-2); }
+
+        /* Bell */
+        .nb-bell {
+          width: 36px; height: 36px;
+          border-radius: 50%;
+          border: 1px solid var(--border-2);
+          background: none; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          color: var(--ink-3); position: relative;
+          transition: background 0.12s, color 0.12s;
+        }
+        .nb-bell:hover { background: var(--bg); color: var(--ink-2); }
+        .nb-bell-dot {
+          position: absolute; top: 6px;
+          ${isRTL ? "left: 7px" : "right: 7px"};
+          width: 7px; height: 7px;
+          background: #ef4444; border-radius: 50%;
+          border: 1.5px solid #fff;
+        }
+
+        /* Avatar — circular with photo/initials, border ring */
+        .nb-avatar-wrap {
+          width: 36px; height: 36px;
+          border-radius: 50%;
+          border: 2px solid var(--border-2);
+          overflow: hidden; cursor: pointer;
+          transition: border-color 0.12s;
+          flex-shrink: 0;
+        }
+        .nb-avatar-wrap:hover { border-color: var(--green); }
+        .nb-avatar-inner {
+          width: 100%; height: 100%;
+          background: var(--green-dim);
+          display: flex; align-items: center; justify-content: center;
+          font-size: 12px; font-weight: 600; color: var(--green);
+        }
+
+        /* User button (avatar + name + chevron) */
+        .nb-user {
+          display: flex; align-items: center; gap: 8px;
+          border: none; background: none; cursor: pointer;
+          font-family: var(--f); padding: 0;
+          ${isRTL ? "flex-direction: row-reverse" : ""};
+        }
+
+        /* Dropdown */
+        .nb-drop {
+          position: absolute;
+          top: calc(100% + 10px);
+          ${isRTL ? "left: 0" : "right: 0"};
+          width: 210px;
+          background: var(--surface);
+          border: 1px solid var(--border-2);
+          border-radius: 12px;
+          box-shadow: 0 8px 30px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
+          padding: 6px;
+          z-index: 100;
+          opacity: 0; transform: translateY(-6px) scale(0.97);
+          pointer-events: none;
+          transition: opacity 0.15s, transform 0.15s;
+        }
+        .nb-drop.open {
+          opacity: 1; transform: translateY(0) scale(1);
+          pointer-events: all;
+        }
+
+        .nb-drop-head {
+          padding: 8px 10px 10px;
+          border-bottom: 1px solid var(--border);
+          margin-bottom: 4px;
+          ${isRTL ? "text-align: right" : ""};
+        }
+        .nb-drop-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+        .nb-drop-email {
+          font-size: 11px; color: var(--ink-3); margin-top: 2px;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .nb-drop-role {
+          display: inline-block; margin-top: 5px;
+          font-size: 10px; font-weight: 500;
+          color: var(--green);
+          background: var(--green-dim);
+          border: 1px solid rgba(34,197,94,0.2);
+          border-radius: 4px;
+          padding: 1.5px 6px;
+        }
+
+        .nb-drop-item {
+          display: flex; align-items: center; gap: 9px;
+          padding: 8px 10px; border-radius: 8px;
+          font-size: 13px; color: var(--ink-2);
+          cursor: pointer; border: none; background: none;
+          width: 100%; font-family: var(--f); text-decoration: none;
+          transition: background 0.12s, color 0.12s;
+          ${isRTL ? "flex-direction: row-reverse; text-align: right" : ""};
+        }
+        .nb-drop-item:hover { background: var(--bg); color: var(--ink); }
+        .nb-drop-item.red { color: #ef4444; }
+        .nb-drop-item.red:hover { background: #fef2f2; }
+
+        .nb-drop-line { height: 1px; background: var(--border); margin: 4px 0; }
+
+        /* Skeleton */
+        .nb-skel {
+          height: 36px; width: 36px; border-radius: 50%;
+          background: linear-gradient(90deg,#f0f0ee 25%,#e6e6e2 50%,#f0f0ee 75%);
+          background-size: 200% 100%;
+          animation: nbsk 1.4s infinite;
+        }
+        @keyframes nbsk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+      `}</style>
+
+      <header className="nb">
+
+        {/* Page title */}
+        <div className="nb-title">
+          <div className="nb-title-h">{page.title}</div>
+          {page.sub && <div className="nb-title-sub">{page.sub}</div>}
+        </div>
+
+        {/* Right */}
+        <div className="nb-right">
+
+          {/* Language switcher */}
+          <div className="nb-lang">
+            <button className={`nb-lang-btn${lang === "fr" ? " on" : ""}`} onClick={() => onLangChange?.("fr")}>FR</button>
+            <button className={`nb-lang-btn${lang === "ar" ? " on" : ""}`} onClick={() => onLangChange?.("ar")}>ع</button>
           </div>
-        )}
-      </div>
 
-      <div className="flex items-center gap-4">
-
-       
-        <div className="relative" ref={notifRef}>
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 text-gray-400 hover:bg-gray-50 rounded-full transition-all"
-          >
-            <Bell size={22} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
-            )}
+          {/* Bell */}
+          <button className="nb-bell" aria-label="Notifications">
+            <Bell size={15} strokeWidth={1.8} />
+            <span className="nb-bell-dot" />
           </button>
 
-         
-          {showNotifications && (
-            <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden z-50">
-              <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                <div>
-                  <h3 className="font-bold text-gray-900 text-sm">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <p className="text-xs text-gray-400">{unreadCount} unread</p>
-                  )}
+          {/* User */}
+          {loading ? (
+            <div className="nb-skel" />
+          ) : (
+            <div ref={dropRef} style={{ position: "relative" }}>
+              <button className="nb-user" onClick={() => setDropOpen(v => !v)}>
+                <div className="nb-avatar-wrap">
+                  <div className="nb-avatar-inner">{initials()}</div>
                 </div>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllRead}
-                    className="text-xs text-[#581c87] font-semibold hover:underline"
-                  >
-                    Mark all read
-                  </button>
-                )}
-              </div>
+              </button>
 
-              <div className="max-h-72 overflow-y-auto">
-                {notifications.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-gray-400">
-                    No notifications yet
-                  </div>
-                ) : (
-                  notifications.map((notif) => (
-                    <div
-                      key={notif.id}
-                      onClick={() => markOneRead(notif.id)}
-                      className={`flex items-start gap-3 px-4 py-3 border-b border-gray-50 last:border-0 cursor-pointer transition-colors ${
-                        notif.read ? "bg-white hover:bg-gray-50" : "bg-purple-50/40 hover:bg-purple-50"
-                      }`}
-                    >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${notifColor(notif.type)}`}>
-                        <Bell size={14} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm ${notif.read ? "text-gray-600" : "text-gray-900 font-semibold"}`}>
-                          {notif.message}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-0.5">{notif.time}</p>
-                      </div>
-                      {!notif.read && (
-                        <div className="w-2 h-2 bg-[#581c87] rounded-full flex-shrink-0 mt-2" />
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="px-4 py-3 border-t border-gray-100 text-center">
-                <button className="text-xs text-[#581c87] font-semibold hover:underline">
-                  View all notifications
+              <div className={`nb-drop${dropOpen ? " open" : ""}`}>
+                <div className="nb-drop-head">
+                  <div className="nb-drop-name">{displayName()}</div>
+                  <div className="nb-drop-email">{user?.email}</div>
+                  <span className="nb-drop-role">
+                    {tx.roles[user?.role ?? ""] ?? user?.role}
+                  </span>
+                </div>
+                <a href="/dashboard/profile" className="nb-drop-item">
+                  <User size={14} strokeWidth={1.8} />{tx.profile}
+                </a>
+                <a href="/dashboard/settings" className="nb-drop-item">
+                  <Settings size={14} strokeWidth={1.8} />{tx.settings}
+                </a>
+                <div className="nb-drop-line" />
+                <button
+                  className="nb-drop-item red"
+                  onClick={() => {
+                    localStorage.removeItem("access");
+                    localStorage.removeItem("refresh");
+                    localStorage.removeItem("user");
+                    window.location.href = "/login";
+                  }}
+                >
+                  <LogOut size={14} strokeWidth={1.8} />{tx.logout}
                 </button>
               </div>
             </div>
           )}
         </div>
-
-        
-        <div className="flex items-center gap-3 pl-4 border-l border-gray-100 cursor-pointer group">
-          <div className="text-right">
-            <p className="text-sm font-bold text-gray-800 group-hover:text-[#581c87] transition-colors">
-              {getDisplayName()}
-            </p>
-            <p className="text-[11px] text-gray-400 font-medium">{user?.email || 'loading...'}</p>
-          </div>
-          <div className="w-10 h-10 bg-[#581c87] rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md">
-            {getInitials()}
-          </div>
-          <ChevronDown size={16} className="text-gray-400" />
-        </div>
-
-      </div>
-    </header>
+      </header>
+    </>
   );
 }
