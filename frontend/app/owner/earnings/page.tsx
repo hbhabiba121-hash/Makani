@@ -6,6 +6,108 @@ import { Download, Search, FileText, TrendingUp, TrendingDown, Wallet, DollarSig
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from "recharts";
 import api from "@/lib/axios";
 
+const i18n = {
+  fr: {
+    breadcrumb:       "Accueil › Revenus",
+    title:            "Détail des revenus",
+    subtitle:         "Suivez exactement d'où vient votre argent et où il va",
+    filter:           "Filtrer",
+    exportPDF:        "Exporter PDF",
+    generating:       "Génération...",
+    year:             "Année",
+    month:            "Mois",
+    resetFilters:     "Réinitialiser",
+    totalRevenue:     "Revenus totaux",
+    totalExpenses:    "Dépenses totales",
+    opCosts:          "Coûts opérationnels",
+    agencyComm:       "Commission agence",
+    pctRevenue:       "15% des revenus",
+    netProfit:        "Votre bénéfice net",
+    afterComm:        "Après commission & dépenses",
+    monthlyTrend:     (y: number) => `📈 Tendance mensuelle des revenus (${y})`,
+    revDist:          (l: string) => `🥧 Répartition des revenus (${l})`,
+    expByCat:         (l: string) => `💸 Dépenses par catégorie (${l})`,
+    finBreakdown:     (l: string) => `💰 Détail financier (${l})`,
+    totalRevBook:     "Revenus totaux des réservations",
+    agencyCommPct:    (p: string) => `− Commission agence (${p}%)`,
+    expensesDetail:   "− Dépenses (Ménage, WiFi, Maintenance, etc.)",
+    yourEarnings:     "= Vos revenus (Bénéfice net)",
+    profitMargin:     "Marge bénéficiaire",
+    ledger:           (l: string) => `📋 Grand livre des revenus (${l})`,
+    searchPlaceholder:"Rechercher par propriété ou date...",
+    date:             "Date",
+    propName:         "Propriété",
+    revenue:          "Revenus",
+    expenses:         "Dépenses",
+    commission:       "Commission",
+    netToOwner:       "Net propriétaire",
+    noEarnings:       (l: string) => `Aucun revenu trouvé pour ${l}`,
+    totalRev:         "Revenus totaux",
+    totalExp:         "Dépenses totales",
+    fullYear:         (y: number) => `Année complète ${y}`,
+    loading:          "Chargement des données...",
+    yourEarningsLbl:  "Vos gains",
+    agencyFee:        "Frais agence",
+    expensesLbl:      "Dépenses",
+    revenue_chart:    "Revenus",
+    commission_chart: "Commission",
+    expenses_chart:   "Dépenses",
+    netProfit_chart:  "Bénéfice net",
+    months: ["Tous les mois","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"],
+  },
+  ar: {
+    breadcrumb:       "الرئيسية › الإيرادات",
+    title:            "تفاصيل الإيرادات",
+    subtitle:         "تتبع مصادر أموالك ووجهاتها بدقة",
+    filter:           "تصفية",
+    exportPDF:        "تصدير PDF",
+    generating:       "جارٍ التوليد...",
+    year:             "السنة",
+    month:            "الشهر",
+    resetFilters:     "إعادة تعيين",
+    totalRevenue:     "إجمالي الإيرادات",
+    totalExpenses:    "إجمالي المصروفات",
+    opCosts:          "التكاليف التشغيلية",
+    agencyComm:       "عمولة الوكالة",
+    pctRevenue:       "15% من الإيرادات",
+    netProfit:        "صافي ربحك",
+    afterComm:        "بعد العمولة والمصروفات",
+    monthlyTrend:     (y: number) => `📈 الاتجاه الشهري للإيرادات (${y})`,
+    revDist:          (l: string) => `🥧 توزيع الإيرادات (${l})`,
+    expByCat:         (l: string) => `💸 المصروفات حسب الفئة (${l})`,
+    finBreakdown:     (l: string) => `💰 التفاصيل المالية (${l})`,
+    totalRevBook:     "إجمالي إيرادات الحجوزات",
+    agencyCommPct:    (p: string) => `− عمولة الوكالة (${p}%)`,
+    expensesDetail:   "− المصروفات (تنظيف، واي فاي، صيانة، إلخ)",
+    yourEarnings:     "= أرباحك (صافي الربح)",
+    profitMargin:     "هامش الربح",
+    ledger:           (l: string) => `📋 سجل الإيرادات التفصيلي (${l})`,
+    searchPlaceholder:"بحث بالعقار أو التاريخ...",
+    date:             "التاريخ",
+    propName:         "العقار",
+    revenue:          "الإيرادات",
+    expenses:         "المصروفات",
+    commission:       "العمولة",
+    netToOwner:       "صافي المالك",
+    noEarnings:       (l: string) => `لا توجد إيرادات لـ ${l}`,
+    totalRev:         "إجمالي الإيرادات",
+    totalExp:         "إجمالي المصروفات",
+    fullYear:         (y: number) => `السنة الكاملة ${y}`,
+    loading:          "جارٍ تحميل البيانات...",
+    yourEarningsLbl:  "أرباحك",
+    agencyFee:        "رسوم الوكالة",
+    expensesLbl:      "المصروفات",
+    revenue_chart:    "الإيرادات",
+    commission_chart: "العمولة",
+    expenses_chart:   "المصروفات",
+    netProfit_chart:  "صافي الربح",
+    months: ["كل الأشهر","يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"],
+  },
+} as const;
+
+type Lang = "fr" | "ar";
+
+
 interface Financial {
   id: number;
   property: { id: number; name: string };
@@ -36,23 +138,8 @@ interface Property {
   monthly_rent?: string;
 }
 
-const MONTHS = [
-  { value: 0, label: "All Months" },
-  { value: 1, label: "January" },
-  { value: 2, label: "February" },
-  { value: 3, label: "March" },
-  { value: 4, label: "April" },
-  { value: 5, label: "May" },
-  { value: 6, label: "June" },
-  { value: 7, label: "July" },
-  { value: 8, label: "August" },
-  { value: 9, label: "September" },
-  { value: 10, label: "October" },
-  { value: 11, label: "November" },
-  { value: 12, label: "December" },
-];
-
 export default function OwnerEarningsPage() {
+
   const router = useRouter();
   const [financials, setFinancials] = useState<Financial[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -61,8 +148,27 @@ export default function OwnerEarningsPage() {
   const [search, setSearch] = useState("");
   const [exporting, setExporting] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(0); // 0 = All Months
+  const [selectedMonth, setSelectedMonth] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+
+  const [lang, setLang] = useState<Lang>("fr");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("lang") as Lang | null;
+    if (stored === "fr" || stored === "ar") setLang(stored);
+    const handler = () => {
+      const l = localStorage.getItem("lang") as Lang | null;
+      if (l === "fr" || l === "ar") setLang(l);
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
+
+  const tx    = i18n[lang];
+  const isRTL = lang === "ar";
+
+
+  const MONTHS = tx.months.map((label, value) => ({ value, label }));
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -85,12 +191,11 @@ export default function OwnerEarningsPage() {
         try {
           const finRes = await api.get(`/api/financials/monthly-summary/${prop.id}/?year=${selectedYear}`);
           let finData = Array.isArray(finRes.data) ? finRes.data : [];
-          
-          // Filter by month if selected
+
           if (selectedMonth !== 0) {
             finData = finData.filter((item: any) => item.month === selectedMonth);
           }
-          
+
           const processedData = finData.map((item: any) => ({
             ...item,
             revenue: item.revenue || 0,
@@ -98,40 +203,37 @@ export default function OwnerEarningsPage() {
             commission: item.commission || (Number(item.revenue) * 0.15),
             owner_payout: item.net_profit || (Number(item.revenue) * 0.85),
           }));
-          
+
           allFinancials.push(...processedData);
         } catch (err) {
           console.warn(`No financial data for property ${prop.id}:`, err);
         }
       }
-      
+
       allFinancials.sort((a, b) => {
         if (b.year !== a.year) return b.year - a.year;
         return b.month - a.month;
       });
       setFinancials(allFinancials);
 
-      // Fetch expenses with month filtering
       const allExpensesData: Expense[] = [];
       for (const prop of propsData) {
         try {
           const expRes = await api.get(`/api/financials/expenses/?property_id=${prop.id}`);
           let expData = expRes.data || [];
-          
-          // Filter expenses by selected month and year
+
           if (selectedMonth !== 0) {
             expData = expData.filter((exp: Expense) => {
               const expDate = new Date(exp.date);
               return expDate.getMonth() + 1 === selectedMonth && expDate.getFullYear() === selectedYear;
             });
           } else {
-            // Filter by year only
             expData = expData.filter((exp: Expense) => {
               const expDate = new Date(exp.date);
               return expDate.getFullYear() === selectedYear;
             });
           }
-          
+
           allExpensesData.push(...expData);
         } catch (err) {
           console.warn(`No expenses for property ${prop.id}:`, err);
@@ -146,7 +248,6 @@ export default function OwnerEarningsPage() {
     }
   };
 
-  // Refetch when month changes
   useEffect(() => {
     if (!loading) {
       fetchData();
@@ -162,7 +263,7 @@ export default function OwnerEarningsPage() {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Earnings_Report_${selectedYear}${selectedMonth ? `_${MONTHS.find(m => m.value === selectedMonth)?.label}` : ''}.pdf`);
+      link.setAttribute('download', `Earnings_Report_${selectedYear}${selectedMonth ? `_${MONTHS[selectedMonth]?.label}` : ''}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -174,33 +275,22 @@ export default function OwnerEarningsPage() {
     }
   };
 
-  // Calculate totals from filtered data
-  const totalRevenue = financials.reduce((sum, f) => sum + Number(f.revenue || 0), 0);
-  const totalExpenses = allExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const totalRevenue    = financials.reduce((sum, f) => sum + Number(f.revenue || 0), 0);
+  const totalExpenses   = allExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const totalCommission = financials.reduce((sum, f) => sum + Number(f.commission || 0), 0);
-  const totalNetProfit = financials.reduce((sum, f) => sum + Number(f.owner_payout || f.net_profit || 0), 0);
+  const totalNetProfit  = financials.reduce((sum, f) => sum + Number(f.owner_payout || f.net_profit || 0), 0);
 
-  // Monthly data for chart (only when viewing all months)
   const monthlyChartData = (() => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const data = months.map((month, idx) => ({
-      month,
-      revenue: 0,
-      commission: 0,
-      expenses: 0,
-      netProfit: 0
-    }));
-    
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const data = months.map((month) => ({ month, revenue: 0, commission: 0, expenses: 0, netProfit: 0 }));
     financials.forEach(f => {
       const monthIdx = (f.month || 1) - 1;
       if (monthIdx >= 0 && monthIdx < 12) {
-        data[monthIdx].revenue += Number(f.revenue || 0);
+        data[monthIdx].revenue    += Number(f.revenue || 0);
         data[monthIdx].commission += Number(f.commission || 0);
-        data[monthIdx].netProfit += Number(f.owner_payout || f.net_profit || 0);
+        data[monthIdx].netProfit  += Number(f.owner_payout || f.net_profit || 0);
       }
     });
-
-    // Add expenses to monthly data
     allExpenses.forEach(exp => {
       const expDate = new Date(exp.date);
       const monthIdx = expDate.getMonth();
@@ -208,24 +298,21 @@ export default function OwnerEarningsPage() {
         data[monthIdx].expenses += Number(exp.amount || 0);
       }
     });
-    
     return data;
   })();
 
-  // Expenses by category from filtered expense records
   const expensesByCategory = allExpenses.reduce((acc, e) => {
     acc[e.category] = (acc[e.category] || 0) + Number(e.amount);
     return acc;
   }, {} as Record<string, number>);
-  
-  const expenseCategories = Object.entries(expensesByCategory).map(([name, value]) => ({ name, value }));
-  const COLORS = ['#581c87', '#7c3aed', '#a855f7', '#c084fc', '#e9d5ff', '#f3e8ff'];
 
-  // Revenue breakdown for pie chart
+  const expenseCategories = Object.entries(expensesByCategory).map(([name, value]) => ({ name, value }));
+  const COLORS = ['#22c55e','#16a34a','#4ade80','#86efac','#bbf7d0','#dcfce7'];
+
   const revenueBreakdown = [
-    { name: 'Your Earnings', value: totalNetProfit, color: '#10b981' },
-    { name: 'Agency Fee', value: totalCommission, color: '#ef4444' },
-    { name: 'Expenses', value: totalExpenses, color: '#f97316' },
+    { name: tx.yourEarningsLbl, value: totalNetProfit,  color: '#22c55e' },
+    { name: tx.agencyFee,       value: totalCommission, color: '#ef4444' },
+    { name: tx.expensesLbl,     value: totalExpenses,   color: '#f97316' },
   ].filter(item => item.value > 0);
 
   const filtered = financials.filter(f =>
@@ -234,359 +321,348 @@ export default function OwnerEarningsPage() {
   );
 
   const getMonthLabel = () => {
-    if (selectedMonth === 0) return `Full Year ${selectedYear}`;
-    return `${MONTHS.find(m => m.value === selectedMonth)?.label} ${selectedYear}`;
+    if (selectedMonth === 0) return tx.fullYear(selectedYear);
+    return `${MONTHS[selectedMonth]?.label} ${selectedYear}`;
   };
+
+
+  const dir = isRTL ? "rtl" : "ltr";
+  const f   = isRTL ? "'Cairo'" : "'Geist'";
+
+  const css = `
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
+    .oe { font-family: ${f}, system-ui, sans-serif; direction: ${dir}; }
+    .oe-lang{display:flex;align-items:center;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;}
+    .oe-lang-btn{padding:5px 11px;font-size:12px;font-weight:500;font-family:${f},system-ui,sans-serif;border:none;background:none;color:#9ca3af;cursor:pointer;transition:background .12s,color .12s;line-height:1;}
+    .oe-lang-btn:first-child{border-right:1px solid #e5e7eb;}
+    .oe-lang-btn.on{background:#22c55e;color:#fff;}
+    .oe-lang-btn:not(.on):hover{background:#f9fafb;color:#374151;}
+  `;
 
   if (loading) {
     return (
       <div className="p-8 bg-[#f9fafb] min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#581c87] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading earnings data...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#22c55e] mx-auto"></div>
+          <p className="mt-4 text-gray-600">{i18n[lang].loading}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 bg-[#f9fafb] min-h-screen">
-      <div className="flex justify-between items-start mb-8 flex-wrap gap-4">
-        <div>
-          <p className="text-sm text-gray-400 mb-1">Home › Earnings</p>
-          <h1 className="text-2xl font-bold text-gray-900">Earnings Breakdown</h1>
-          <p className="text-sm text-gray-500 mt-1">See exactly where your money comes from and where it goes</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white hover:bg-gray-50"
-          >
-            <Filter size={16} />
-            Filter
-          </button>
-          <button
-            onClick={handleExportPDF}
-            disabled={exporting}
-            className="flex items-center gap-2 bg-[#581c87] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#4c1d95] transition-all disabled:opacity-70"
-          >
-            {exporting ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <FileText size={16} />
-            )}
-            {exporting ? "Generating..." : "Export PDF"}
-          </button>
-        </div>
-      </div>
+    <>
+      <style>{css}</style>
+      <div className="oe p-8 bg-[#f9fafb] min-h-screen">
 
-      {/* Filter Bar */}
-      {showFilters && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Year</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white"
-              >
-                <option value={2024}>2024</option>
-                <option value={2025}>2025</option>
-                <option value={2026}>2026</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Month</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white min-w-[140px]"
-              >
-                {MONTHS.map(month => (
-                  <option key={month.value} value={month.value}>{month.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
+        {/* Header */}
+        <div className={`flex justify-between items-start mb-8 flex-wrap gap-4 ${isRTL ? "flex-row-reverse" : ""}`}>
+          <div>
+            <p className="text-sm text-gray-400 mb-1">{tx.breadcrumb}</p>
+            <h1 className="text-2xl font-bold text-gray-900">{tx.title}</h1>
+            <p className="text-sm text-gray-500 mt-1">{tx.subtitle}</p>
+          </div>
+          <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white hover:bg-gray-50 transition-colors ${isRTL ? "flex-row-reverse" : ""}`}
+            >
+              <Filter size={16} />
+              {tx.filter}
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={exporting}
+              className={`flex items-center gap-2 bg-[#22c55e] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#16a34a] transition-all disabled:opacity-70 ${isRTL ? "flex-row-reverse" : ""}`}
+            >
+              {exporting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FileText size={16} />}
+              {exporting ? tx.generating : tx.exportPDF}
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Bar */}
+        {showFilters && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
+            <div className={`flex flex-wrap gap-4 items-end ${isRTL ? "flex-row-reverse" : ""}`}>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{tx.year}</label>
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:outline-none focus:border-[#22c55e]"
+                >
+                  <option value={2024}>2024</option>
+                  <option value={2025}>2025</option>
+                  <option value={2026}>2026</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{tx.month}</label>
+                <select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white min-w-[140px] focus:outline-none focus:border-[#22c55e]"
+                >
+                  {MONTHS.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
               <button
-                onClick={() => {
-                  setSelectedYear(new Date().getFullYear());
-                  setSelectedMonth(0);
-                }}
-                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700"
+                onClick={() => { setSelectedYear(new Date().getFullYear()); setSelectedMonth(0); }}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
               >
-                Reset Filters
+                {tx.resetFilters}
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <DollarSign size={18} className="text-[#581c87]" />
-            <span className="text-xs text-gray-400">Total Revenue</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{totalRevenue.toLocaleString()} MAD</p>
-          <p className="text-xs text-gray-400 mt-1">{getMonthLabel()}</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Receipt size={18} className="text-orange-500" />
-            <span className="text-xs text-gray-400">Total Expenses</span>
-          </div>
-          <p className="text-2xl font-bold text-orange-500">{totalExpenses.toLocaleString()} MAD</p>
-          <p className="text-xs text-gray-400 mt-1">Operational costs</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingDown size={18} className="text-red-500" />
-            <span className="text-xs text-gray-400">Agency Commission</span>
-          </div>
-          <p className="text-2xl font-bold text-red-500">{totalCommission.toLocaleString()} MAD</p>
-          <p className="text-xs text-gray-400 mt-1">15% of revenue</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <Wallet size={18} className="text-green-600" />
-            <span className="text-xs text-gray-400">Your Net Profit</span>
-          </div>
-          <p className="text-2xl font-bold text-green-600">{totalNetProfit.toLocaleString()} MAD</p>
-          <p className="text-xs text-gray-400 mt-1">After commission & expenses</p>
-        </div>
-      </div>
-
-      {/* Monthly Earnings Trend - Only show when viewing all months */}
-      {selectedMonth === 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
-          <h2 className="font-bold text-gray-900 text-lg mb-4">📈 Monthly Earnings Trend ({selectedYear})</h2>
-          <ResponsiveContainer width="100%" height={350}>
-            <AreaChart data={monthlyChartData}>
-              <defs>
-                <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#581c87" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#581c87" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} />
-              <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} MAD`]} />
-              <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#581c87" strokeWidth={2} fill="url(#revenueGrad)" />
-              <Area type="monotone" dataKey="commission" name="Commission" stroke="#ef4444" strokeWidth={2} fill="none" strokeDasharray="5 5" />
-              <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#f97316" strokeWidth={2} fill="none" strokeDasharray="5 5" />
-              <Area type="monotone" dataKey="netProfit" name="Net Profit" stroke="#10b981" strokeWidth={2} fill="url(#profitGrad)" />
-              <Legend />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {/* Revenue Distribution Pie Chart */}
-      {revenueBreakdown.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
-          <h2 className="font-bold text-gray-900 text-lg mb-4">🥧 Revenue Distribution ({getMonthLabel()})</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={revenueBreakdown}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {revenueBreakdown.map((item, index) => (
-                    <Cell key={`cell-${index}`} fill={item.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => `${Number(value).toLocaleString()} MAD`} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-3">
-              {revenueBreakdown.map((item) => (
-                <div key={item.name} className="flex justify-between items-center p-3 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                    <span className="text-sm text-gray-600">{item.name}</span>
-                  </div>
-                  <span className="font-semibold text-gray-900">{item.value.toLocaleString()} MAD</span>
-                </div>
-              ))}
-              <div className="pt-3 mt-2 border-t-2 border-gray-200">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-gray-900">Total Revenue</span>
-                  <span className="font-bold text-gray-900">{totalRevenue.toLocaleString()} MAD</span>
-                </div>
-              </div>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+            <div className={`flex items-center gap-2 mb-2 ${isRTL ? "flex-row-reverse" : ""}`}>
+              <DollarSign size={18} className="text-[#22c55e]" />
+              <span className="text-xs text-gray-400">{tx.totalRevenue}</span>
             </div>
+            <p className="text-2xl font-bold text-gray-900">{totalRevenue.toLocaleString()} MAD</p>
+            <p className="text-xs text-gray-400 mt-1">{getMonthLabel()}</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+            <div className={`flex items-center gap-2 mb-2 ${isRTL ? "flex-row-reverse" : ""}`}>
+              <Receipt size={18} className="text-orange-500" />
+              <span className="text-xs text-gray-400">{tx.totalExpenses}</span>
+            </div>
+            <p className="text-2xl font-bold text-orange-500">{totalExpenses.toLocaleString()} MAD</p>
+            <p className="text-xs text-gray-400 mt-1">{tx.opCosts}</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+            <div className={`flex items-center gap-2 mb-2 ${isRTL ? "flex-row-reverse" : ""}`}>
+              <TrendingDown size={18} className="text-red-500" />
+              <span className="text-xs text-gray-400">{tx.agencyComm}</span>
+            </div>
+            <p className="text-2xl font-bold text-red-500">{totalCommission.toLocaleString()} MAD</p>
+            <p className="text-xs text-gray-400 mt-1">{tx.pctRevenue}</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+            <div className={`flex items-center gap-2 mb-2 ${isRTL ? "flex-row-reverse" : ""}`}>
+              <Wallet size={18} className="text-[#22c55e]" />
+              <span className="text-xs text-gray-400">{tx.netProfit}</span>
+            </div>
+            <p className="text-2xl font-bold text-[#22c55e]">{totalNetProfit.toLocaleString()} MAD</p>
+            <p className="text-xs text-gray-400 mt-1">{tx.afterComm}</p>
           </div>
         </div>
-      )}
 
-      {/* Expenses by Category Chart */}
-      {expenseCategories.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
-          <h2 className="font-bold text-gray-900 text-lg mb-4">💸 Expenses by Category ({getMonthLabel()})</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={expenseCategories}>
+        {/* Monthly Earnings Trend */}
+        {selectedMonth === 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
+            <h2 className="font-bold text-gray-900 text-lg mb-4">{tx.monthlyTrend(selectedYear)}</h2>
+            <ResponsiveContainer width="100%" height={350}>
+              <AreaChart data={monthlyChartData}>
+                <defs>
+                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#16a34a" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={(value) => `${Number(value).toLocaleString()} MAD`} />
-                <Bar dataKey="value" fill="#581c87" radius={[8, 8, 0, 0]} />
-              </BarChart>
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} />
+                <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} MAD`]} />
+                <Area type="monotone" dataKey="revenue"    name={tx.revenue_chart}    stroke="#22c55e" strokeWidth={2} fill="url(#revenueGrad)" />
+                <Area type="monotone" dataKey="commission" name={tx.commission_chart}  stroke="#ef4444" strokeWidth={2} fill="none" strokeDasharray="5 5" />
+                <Area type="monotone" dataKey="expenses"   name={tx.expenses_chart}   stroke="#f97316" strokeWidth={2} fill="none" strokeDasharray="5 5" />
+                <Area type="monotone" dataKey="netProfit"  name={tx.netProfit_chart}  stroke="#16a34a" strokeWidth={2} fill="url(#profitGrad)" />
+                <Legend />
+              </AreaChart>
             </ResponsiveContainer>
-            <div className="space-y-2">
-              {expenseCategories.map((cat) => (
-                <div key={cat.name} className="flex justify-between items-center p-2 border-b border-gray-100">
-                  <span className="text-sm text-gray-600">{cat.name}</span>
-                  <span className="font-semibold text-orange-500">{cat.value.toLocaleString()} MAD</span>
-                </div>
-              ))}
-              <div className="pt-2 mt-2 border-t-2 border-gray-200">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-gray-900">Total Expenses</span>
-                  <span className="font-bold text-orange-500">{totalExpenses.toLocaleString()} MAD</span>
+          </div>
+        )}
+
+        {/* Revenue Distribution */}
+        {revenueBreakdown.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
+            <h2 className="font-bold text-gray-900 text-lg mb-4">{tx.revDist(getMonthLabel())}</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie data={revenueBreakdown} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                    {revenueBreakdown.map((item, index) => (
+                      <Cell key={`cell-${index}`} fill={item.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `${Number(value).toLocaleString()} MAD`} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-3">
+                {revenueBreakdown.map((item) => (
+                  <div key={item.name} className={`flex justify-between items-center p-3 border-b border-gray-100 ${isRTL ? "flex-row-reverse" : ""}`}>
+                    <div className={`flex items-center gap-2 ${isRTL ? "flex-row-reverse" : ""}`}>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                      <span className="text-sm text-gray-600">{item.name}</span>
+                    </div>
+                    <span className="font-semibold text-gray-900">{item.value.toLocaleString()} MAD</span>
+                  </div>
+                ))}
+                <div className="pt-3 mt-2 border-t-2 border-gray-200">
+                  <div className={`flex justify-between items-center ${isRTL ? "flex-row-reverse" : ""}`}>
+                    <span className="font-bold text-gray-900">{tx.totalRev}</span>
+                    <span className="font-bold text-gray-900">{totalRevenue.toLocaleString()} MAD</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Financial Breakdown - Clear Money Flow */}
-      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl p-6 mb-8 border border-purple-100">
-        <h2 className="font-bold text-gray-900 text-lg mb-4">💰 Financial Breakdown ({getMonthLabel()})</h2>
-        <div className="space-y-3 max-w-2xl">
-          <div className="flex justify-between items-center pb-3 border-b border-purple-200">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 bg-[#581c87] rounded-full"></div>
-              <span className="text-gray-700">Total Revenue from bookings</span>
+        {/* Expenses by Category */}
+        {expenseCategories.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
+            <h2 className="font-bold text-gray-900 text-lg mb-4">{tx.expByCat(getMonthLabel())}</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={expenseCategories}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(value) => `${Number(value).toLocaleString()} MAD`} />
+                  <Bar dataKey="value" fill="#22c55e" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="space-y-2">
+                {expenseCategories.map((cat) => (
+                  <div key={cat.name} className={`flex justify-between items-center p-2 border-b border-gray-100 ${isRTL ? "flex-row-reverse" : ""}`}>
+                    <span className="text-sm text-gray-600">{cat.name}</span>
+                    <span className="font-semibold text-orange-500">{cat.value.toLocaleString()} MAD</span>
+                  </div>
+                ))}
+                <div className="pt-2 mt-2 border-t-2 border-gray-200">
+                  <div className={`flex justify-between items-center ${isRTL ? "flex-row-reverse" : ""}`}>
+                    <span className="font-bold text-gray-900">{tx.totalExp}</span>
+                    <span className="font-bold text-orange-500">{totalExpenses.toLocaleString()} MAD</span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <span className="font-semibold text-gray-900">{totalRevenue.toLocaleString()} MAD</span>
           </div>
-          
-          <div className="flex justify-between items-center pb-3 border-b border-purple-200 pl-6">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-              <span className="text-gray-600">− Agency Commission ({totalRevenue > 0 ? ((totalCommission/totalRevenue)*100).toFixed(0) : 15}%)</span>
-            </div>
-            <span className="text-red-500">-{totalCommission.toLocaleString()} MAD</span>
-          </div>
-          
-          <div className="flex justify-between items-center pb-3 border-b border-purple-200 pl-6">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-              <span className="text-gray-600">− Expenses (Cleaning, WiFi, Maintenance, etc.)</span>
-            </div>
-            <span className="text-orange-500">-{totalExpenses.toLocaleString()} MAD</span>
-          </div>
-          
-          <div className="flex justify-between items-center pt-3">
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="font-bold text-gray-900">= Your Earnings (Net Profit)</span>
-            </div>
-            <span className="text-xl font-bold text-green-600">{totalNetProfit.toLocaleString()} MAD</span>
-          </div>
-        </div>
-        
-        <div className="mt-4 pt-4 border-t border-purple-200">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm text-gray-500">Profit Margin</span>
-            <span className="text-sm font-semibold text-green-600">
-              {totalRevenue > 0 ? ((totalNetProfit / totalRevenue) * 100).toFixed(1) : 0}%
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-green-500 h-2 rounded-full transition-all" 
-              style={{ width: `${totalRevenue > 0 ? (totalNetProfit / totalRevenue) * 100 : 0}%` }}
-            />
-          </div>
-        </div>
-      </div>
+        )}
 
-      {/* Detailed Earnings Ledger Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h2 className="font-bold text-gray-900 text-lg">📋 Detailed Earnings Ledger ({getMonthLabel()})</h2>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-              <Search size={16} />
-            </span>
-            <input
-              type="text"
-              placeholder="Search by property or date..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-64 pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#581c87] bg-gray-50"
-            />
+        {/* Financial Breakdown */}
+        <div className="bg-[#f0fdf4] rounded-2xl p-6 mb-8 border border-green-100">
+          <h2 className="font-bold text-gray-900 text-lg mb-4">{tx.finBreakdown(getMonthLabel())}</h2>
+          <div className="space-y-3 max-w-2xl">
+            <div className={`flex justify-between items-center pb-3 border-b border-green-200 ${isRTL ? "flex-row-reverse" : ""}`}>
+              <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
+                <div className="w-2 h-2 bg-[#22c55e] rounded-full"></div>
+                <span className="text-gray-700">{tx.totalRevBook}</span>
+              </div>
+              <span className="font-semibold text-gray-900">{totalRevenue.toLocaleString()} MAD</span>
+            </div>
+            <div className={`flex justify-between items-center pb-3 border-b border-green-200 ${isRTL ? "pr-6" : "pl-6"} ${isRTL ? "flex-row-reverse" : ""}`}>
+              <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
+                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                <span className="text-gray-600">
+                  {tx.agencyCommPct(totalRevenue > 0 ? ((totalCommission / totalRevenue) * 100).toFixed(0) : "15")}
+                </span>
+              </div>
+              <span className="text-red-500">-{totalCommission.toLocaleString()} MAD</span>
+            </div>
+            <div className={`flex justify-between items-center pb-3 border-b border-green-200 ${isRTL ? "pr-6" : "pl-6"} ${isRTL ? "flex-row-reverse" : ""}`}>
+              <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
+                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                <span className="text-gray-600">{tx.expensesDetail}</span>
+              </div>
+              <span className="text-orange-500">-{totalExpenses.toLocaleString()} MAD</span>
+            </div>
+            <div className={`flex justify-between items-center pt-3 ${isRTL ? "flex-row-reverse" : ""}`}>
+              <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
+                <div className="w-2 h-2 bg-[#22c55e] rounded-full"></div>
+                <span className="font-bold text-gray-900">{tx.yourEarnings}</span>
+              </div>
+              <span className="text-xl font-bold text-[#22c55e]">{totalNetProfit.toLocaleString()} MAD</span>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-green-200">
+            <div className={`flex justify-between items-center mb-2 ${isRTL ? "flex-row-reverse" : ""}`}>
+              <span className="text-sm text-gray-500">{tx.profitMargin}</span>
+              <span className="text-sm font-semibold text-[#22c55e]">
+                {totalRevenue > 0 ? ((totalNetProfit / totalRevenue) * 100).toFixed(1) : 0}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-[#22c55e] h-2 rounded-full transition-all"
+                style={{ width: `${totalRevenue > 0 ? (totalNetProfit / totalRevenue) * 100 : 0}%` }} />
+            </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-t border-gray-100 bg-gray-50">
-                <th className="px-6 py-3 text-sm font-semibold text-[#581c87]">Date</th>
-                <th className="px-6 py-3 text-sm font-semibold text-[#581c87]">Property Name</th>
-                <th className="px-6 py-3 text-sm font-semibold text-[#581c87]">Revenue</th>
-                <th className="px-6 py-3 text-sm font-semibold text-[#581c87]">Expenses</th>
-                <th className="px-6 py-3 text-sm font-semibold text-[#581c87]">Commission</th>
-                <th className="px-6 py-3 text-sm font-semibold text-[#581c87] text-green-600">Net to Owner</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-400 text-sm">
-                    No earnings found for {getMonthLabel()}
-                  </td>
+        {/* Detailed Earnings Ledger */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className={`p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${isRTL ? "sm:flex-row-reverse" : ""}`}>
+            <h2 className="font-bold text-gray-900 text-lg">{tx.ledger(getMonthLabel())}</h2>
+            <div className="relative">
+              <span className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 text-gray-400`}>
+                <Search size={16} />
+              </span>
+              <input
+                type="text"
+                placeholder={tx.searchPlaceholder}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className={`w-64 ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#22c55e] bg-gray-50`}
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left" style={{ direction: dir }}>
+              <thead>
+                <tr className="border-t border-gray-100 bg-gray-50">
+                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.date}</th>
+                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.propName}</th>
+                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.revenue}</th>
+                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.expenses}</th>
+                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.commission}</th>
+                  <th className="px-6 py-3 text-sm font-semibold text-green-600">{tx.netToOwner}</th>
                 </tr>
-              ) : (
-                filtered.map((f, i) => (
-                  <tr key={i} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-gray-500 text-sm">
-                      <div className="flex items-center gap-1">
-                        <Calendar size={12} />
-                        {f.month_display} {f.year}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 font-medium text-gray-900">{f.property.name}</td>
-                    <td className="px-6 py-4 text-gray-700 font-semibold">
-                      {Number(f.revenue).toLocaleString()} MAD
-                    </td>
-                    <td className="px-6 py-4 text-orange-500">
-                      {Number(f.expenses).toLocaleString()} MAD
-                    </td>
-                    <td className="px-6 py-4 text-red-500">
-                      {Number(f.commission).toLocaleString()} MAD
-                    </td>
-                    <td className="px-6 py-4 font-bold text-green-600">
-                      {Number(f.owner_payout || f.net_profit || 0).toLocaleString()} MAD
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-gray-400 text-sm">
+                      {tx.noEarnings(getMonthLabel())}
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  filtered.map((f, i) => (
+                    <tr key={i} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 text-gray-500 text-sm">
+                        <div className={`flex items-center gap-1 ${isRTL ? "flex-row-reverse" : ""}`}>
+                          <Calendar size={12} />
+                          {f.month_display} {f.year}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-medium text-gray-900">{f.property.name}</td>
+                      <td className="px-6 py-4 text-gray-700 font-semibold">{Number(f.revenue).toLocaleString()} MAD</td>
+                      <td className="px-6 py-4 text-orange-500">{Number(f.expenses).toLocaleString()} MAD</td>
+                      <td className="px-6 py-4 text-red-500">{Number(f.commission).toLocaleString()} MAD</td>
+                      <td className="px-6 py-4 font-bold text-[#22c55e]">{Number(f.owner_payout || f.net_profit || 0).toLocaleString()} MAD</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

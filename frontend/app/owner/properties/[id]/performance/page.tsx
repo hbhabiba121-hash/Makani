@@ -3,487 +3,501 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { 
-  ArrowLeft, TrendingUp, Calendar, Users, Star, 
-  Wallet, TrendingDown, Home, BarChart3, 
-  Percent, DollarSign, Briefcase, Clock, Award,
+  ArrowLeft, TrendingUp, Calendar, 
+  Wallet, Home, BarChart3, 
+  Percent, DollarSign, Briefcase, Award,
   AlertCircle, XCircle
 } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts";
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts";
 import api from "@/lib/axios";
 
+const i18n = {
+  fr: {
+    back:           "Retour aux propriétés",
+    perfRating:     "Note de performance",
+    basedOn:        (r: string) => `Basé sur ${r}% d'occupation`,
+    netProfitLabel: (y: number) => `Bénéfice net (${y})`,
+    profitMargin:   (p: string) => `${p}% de marge`,
+    totalBookings:  "Réservations",
+    nightsBooked:   (n: number) => `${n} nuit${n > 1 ? "s" : ""} réservée${n > 1 ? "s" : ""}`,
+    avgNight:       "Prix moyen / Nuit",
+    acrossStays:    (n: number) => `Sur ${n} séjour${n > 1 ? "s" : ""}`,
+    occupancy:      "Taux d'occupation",
+    ofYear:         (y: number) => `de ${y}`,
+    revenueLabel:   (r: string) => `Revenus : ${r} MAD`,
+    monthlyRevenue: "Revenus mensuels",
+    bookingSources: "Sources de réservation",
+    noBookingData:  "Aucune donnée de réservation",
+    recentBookings: "Réservations récentes",
+    latestStays:    "Derniers séjours enregistrés",
+    noBookings:     (y: number) => `Aucune réservation pour ${y}`,
+    perNight:       "MAD/nuit",
+    insights:       "Analyse de performance",
+    occ_title:      "📊 Analyse d'occupation",
+    occ_excellent:  "✓ Excellente occupation ! Votre bien est très demandé. Envisagez d'augmenter les prix en haute saison.",
+    occ_good:       "ℹ️ Bon taux d'occupation. Optimisez vos photos et description pour attirer plus de réservations.",
+    occ_low:        "⚠️ Faible occupation. Révisez votre stratégie tarifaire et améliorez la qualité de votre annonce.",
+    price_title:    "💰 Stratégie tarifaire",
+    price_avg:      (p: string) => `Moyenne ${p} MAD/nuit`,
+    price_premium:  " – Positionnement premium. Votre bien attire les voyageurs haut de gamme !",
+    price_mid:      " – Prix compétitif. Ajoutez des équipements pour justifier une hausse.",
+    price_low:      " – En dessous du marché. Vous sous-évaluez peut-être votre propriété.",
+    opp_title:      "🎯 Opportunité de revenus",
+    opp_text:       (v: string) => `${v} MAD de potentiel sur les nuits non réservées`,
+    opp_focus:      " – Améliorez votre visibilité et vos avis.",
+    loading:        "Chargement des données...",
+    notFound:       "Propriété introuvable",
+    r_excellent:    "Excellent",
+    r_good:         "Bon",
+    r_average:      "Moyen",
+    r_needs:        "À améliorer",
+  },
+  ar: {
+    back:           "العودة إلى العقارات",
+    perfRating:     "تقييم الأداء",
+    basedOn:        (r: string) => `بناءً على نسبة إشغال ${r}%`,
+    netProfitLabel: (y: number) => `صافي الربح (${y})`,
+    profitMargin:   (p: string) => `هامش ربح ${p}%`,
+    totalBookings:  "الحجوزات",
+    nightsBooked:   (n: number) => `${n} ليلة محجوزة`,
+    avgNight:       "متوسط السعر / ليلة",
+    acrossStays:    (n: number) => `عبر ${n} إقامة`,
+    occupancy:      "نسبة الإشغال",
+    ofYear:         (y: number) => `من سنة ${y}`,
+    revenueLabel:   (r: string) => `الإيرادات: ${r} درهم`,
+    monthlyRevenue: "الإيرادات الشهرية",
+    bookingSources: "مصادر الحجز",
+    noBookingData:  "لا توجد بيانات حجز",
+    recentBookings: "أحدث الحجوزات",
+    latestStays:    "آخر الإقامات المسجلة",
+    noBookings:     (y: number) => `لا توجد حجوزات لسنة ${y}`,
+    perNight:       "درهم/ليلة",
+    insights:       "تحليل الأداء",
+    occ_title:      "📊 تحليل الإشغال",
+    occ_excellent:  "✓ إشغال ممتاز! عقارك مطلوب جداً. فكّر في رفع الأسعار خلال المواسم المرتفعة.",
+    occ_good:       "ℹ️ نسبة إشغال جيدة. حسّن صور ووصف إعلانك لجذب المزيد من الحجوزات.",
+    occ_low:        "⚠️ نسبة إشغال منخفضة. راجع استراتيجية التسعير وحسّن جودة إعلانك.",
+    price_title:    "💰 استراتيجية التسعير",
+    price_avg:      (p: string) => `المتوسط ${p} درهم/ليلة`,
+    price_premium:  " – تموضع فاخر. عقارك يجذب المسافرين الراقيين!",
+    price_mid:      " – تسعير تنافسي. أضف مرافق لتبرير رفع السعر.",
+    price_low:      " – أقل من السوق. ربما تُقيّم عقارك بأقل من قيمته.",
+    opp_title:      "🎯 فرصة الإيرادات",
+    opp_text:       (v: string) => `${v} درهم إيرادات محتملة من الليالي غير المحجوزة`,
+    opp_focus:      " – ركّز على تحسين الظهور والتقييمات.",
+    loading:        "جار تحميل البيانات...",
+    notFound:       "العقار غير موجود",
+    r_excellent:    "ممتاز",
+    r_good:         "جيد",
+    r_average:      "متوسط",
+    r_needs:        "يحتاج تحسيناً",
+  },
+} as const;
+
+type Lang = "fr" | "ar";
+
 interface Property {
-  id: number;
-  name: string;
-  location: string;
-  property_type_display: string;
-  monthly_rent: string;
-  area_sqm: string;
-  bedrooms: number;
-  bathrooms: number;
-  status_display: string;
+  id: number; name: string; location: string;
+  property_type_display: string; monthly_rent: string;
+  area_sqm: string; bedrooms: number; bathrooms: number; status_display: string;
 }
-
 interface Booking {
-  id: number;
-  guest_name: string;
-  booking_source: string;
-  nights: number;
-  price_per_night: number;
-  revenue: number;
-  commission: number;
-  net_profit: number;
-  check_in: string;
-  check_out: string;
-  month: number;
-  year: number;
-  month_display: string;
+  id: number; guest_name: string; booking_source: string;
+  nights: number; price_per_night: number; revenue: number;
+  commission: number; net_profit: number;
+  check_in: string; check_out: string;
+  month: number; year: number; month_display: string;
 }
-
 interface Expense {
-  id: number;
-  category: string;
-  amount: string;
-  date: string;
-  description: string;
-  property_name: string;
+  id: number; category: string; amount: string;
+  date: string; description: string; property_name: string;
 }
-
 interface OccupancyData {
-  occupancy_rate: number;
-  booked_days: number;
-  total_days: number;
-  total_revenue: number;
-  total_stays: number;
+  occupancy_rate: number; booked_days: number; total_days: number;
+  total_revenue: number; total_stays: number;
   monthly_breakdown: Array<{
-    month: number;
-    month_name: string;
-    year: number;
-    booked_days: number;
-    total_days: number;
-    occupancy_rate: number;
+    month: number; month_name: string; year: number;
+    booked_days: number; total_days: number; occupancy_rate: number;
   }>;
 }
 
-export default function PropertyPerformancePage() {
+interface PageProps {
+  lang?: Lang;
+}
+
+export default function PropertyPerformancePage({ lang = "fr" }: PageProps) {
+
   const router = useRouter();
   const params = useParams();
   const propertyId = params.id;
-  
-  const [property, setProperty] = useState<Property | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
+
+  const [property, setProperty]           = useState<Property | null>(null);
+  const [bookings, setBookings]           = useState<Booking[]>([]);
+  const [expenses, setExpenses]           = useState<Expense[]>([]);
   const [occupancyData, setOccupancyData] = useState<OccupancyData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [loading, setLoading]             = useState(true);
+  const [selectedYear, setSelectedYear]   = useState(new Date().getFullYear());
+
+  const tx    = i18n[lang];
+  const isRTL = lang === "ar";
 
   useEffect(() => {
     const token = localStorage.getItem("access");
     if (!token) router.push("/login");
   }, [router]);
 
-  useEffect(() => {
-    if (propertyId) {
-      fetchData();
-    }
-  }, [propertyId, selectedYear]);
+  useEffect(() => { if (propertyId) fetchData(); }, [propertyId, selectedYear]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Get property details
       const propRes = await api.get(`/api/properties/${propertyId}/`);
       setProperty(propRes.data);
-
-      // Get financial records (bookings) for the property
       const finRes = await api.get(`/api/financials/monthly-summary/${propertyId}/?year=${selectedYear}`);
-      const finData = finRes.data || [];
-      setBookings(finData);
-
-      // Get expenses
+      setBookings(finRes.data || []);
       try {
         const expRes = await api.get(`/api/financials/expenses/?property_id=${propertyId}`);
         setExpenses(expRes.data || []);
-      } catch (e) {
-        console.warn("No expenses data");
-        setExpenses([]);
-      }
-
-      // Get occupancy data
+      } catch { setExpenses([]); }
       try {
         const occRes = await api.get(`/api/financials/property-occupancy/${propertyId}/?year=${selectedYear}`);
         setOccupancyData(occRes.data);
-      } catch (e) {
-        console.warn("No occupancy data");
-        setOccupancyData(null);
-      }
-
-    } catch (err) {
-      console.error("Error fetching data:", err);
-    } finally {
-      setLoading(false);
-    }
+      } catch { setOccupancyData(null); }
+    } catch (err) { console.error("Error fetching data:", err); }
+    finally { setLoading(false); }
   };
 
-  // Calculate Performance Metrics
   const calculateMetrics = () => {
-    const totalBookings = bookings.length;
-    const totalNights = bookings.reduce((sum, b) => sum + (b.nights || 0), 0);
-    const totalRevenue = bookings.reduce((sum, b) => sum + Number(b.revenue || 0), 0);
-    const totalPayout = bookings.reduce((sum, b) => sum + Number(b.net_profit || 0), 0);
-    const totalCommission = bookings.reduce((sum, b) => sum + Number(b.commission || 0), 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    
+    const totalBookings    = bookings.length;
+    const totalNights      = bookings.reduce((s, b) => s + (b.nights || 0), 0);
+    const totalRevenue     = bookings.reduce((s, b) => s + Number(b.revenue || 0), 0);
+    const totalPayout      = bookings.reduce((s, b) => s + Number(b.net_profit || 0), 0);
+    const totalCommission  = bookings.reduce((s, b) => s + Number(b.commission || 0), 0);
+    const totalExpenses    = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
     const avgPricePerNight = totalNights > 0 ? totalRevenue / totalNights : Number(property?.monthly_rent || 0) / 30;
-    
-    // Occupancy rate from API or calculated
-    const occupancyRate = occupancyData?.occupancy_rate || (totalNights / 365) * 100;
-    
-    const netProfit = totalRevenue - totalCommission - totalExpenses;
-    const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
-
-    // Platform distribution
-    const platformDistribution: { [key: string]: number } = {};
+    const occupancyRate    = occupancyData?.occupancy_rate || (totalNights / 365) * 100;
+    const netProfit        = totalRevenue - totalCommission - totalExpenses;
+    const profitMargin     = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+    const platformDistribution: { [k: string]: number } = {};
     bookings.forEach(b => {
-      const source = b.booking_source || 'Direct';
-      platformDistribution[source] = (platformDistribution[source] || 0) + 1;
+      const src = b.booking_source || "Direct";
+      platformDistribution[src] = (platformDistribution[src] || 0) + 1;
     });
-
-    return {
-      totalBookings,
-      totalNights,
-      totalRevenue,
-      totalPayout,
-      totalCommission,
-      totalExpenses,
-      avgPricePerNight,
-      occupancyRate,
-      netProfit,
-      profitMargin,
-      platformDistribution,
-    };
+    return { totalBookings, totalNights, totalRevenue, totalPayout, totalCommission,
+      totalExpenses, avgPricePerNight, occupancyRate, netProfit, profitMargin, platformDistribution };
   };
 
-  // Monthly breakdown for chart
   const getMonthlyChartData = () => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const data = months.map((month, idx) => ({
-      month,
-      revenue: 0,
-      bookings: 0,
-      nights: 0,
-      avgPrice: 0,
-    }));
-    
-    bookings.forEach(booking => {
-      const monthIdx = (booking.month || 1) - 1;
-      if (monthIdx >= 0 && monthIdx < 12) {
-        data[monthIdx].revenue += Number(booking.revenue || 0);
-        data[monthIdx].bookings += 1;
-        data[monthIdx].nights += booking.nights || 0;
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const data = months.map(month => ({ month, revenue: 0, bookings: 0, nights: 0, avgPrice: 0 }));
+    bookings.forEach(b => {
+      const idx = (b.month || 1) - 1;
+      if (idx >= 0 && idx < 12) {
+        data[idx].revenue  += Number(b.revenue || 0);
+        data[idx].bookings += 1;
+        data[idx].nights   += b.nights || 0;
       }
     });
-    
-    data.forEach(d => {
-      d.avgPrice = d.nights > 0 ? d.revenue / d.nights : 0;
-    });
-    
+    data.forEach(d => { d.avgPrice = d.nights > 0 ? d.revenue / d.nights : 0; });
     return data;
   };
 
-  const metrics = calculateMetrics();
+  const metrics          = calculateMetrics();
   const monthlyChartData = getMonthlyChartData();
-  const platformData = Object.entries(metrics.platformDistribution).map(([name, value]) => ({ name, value }));
-  
-  const COLORS = ['#581c87', '#7c3aed', '#a855f7', '#c084fc', '#e9d5ff'];
+  const platformData     = Object.entries(metrics.platformDistribution).map(([name, value]) => ({ name, value }));
+  const COLORS           = ["#22c55e","#16a34a","#4ade80","#86efac","#bbf7d0"];
 
-  const getRatingText = (rate: number) => {
-    if (rate >= 70) return { text: "Excellent", color: "text-green-600", bgColor: "bg-green-50", icon: Award };
-    if (rate >= 50) return { text: "Good", color: "text-blue-600", bgColor: "bg-blue-50", icon: TrendingUp };
-    if (rate >= 30) return { text: "Average", color: "text-yellow-600", bgColor: "bg-yellow-50", icon: AlertCircle };
-    return { text: "Needs Improvement", color: "text-red-500", bgColor: "bg-red-50", icon: XCircle };
-  };
+ const getRating = (rate: number) => {
+  if (rate >= 70) return { text: tx.r_excellent, iconBg: "#ffffff", iconColor: "#16a34a", icon: Award };
+  if (rate >= 50) return { text: tx.r_good,      iconBg: "#ffffff", iconColor: "#2563eb", icon: TrendingUp };
+  if (rate >= 30) return { text: tx.r_average,   iconBg: "#ffffff", iconColor: "#ca8a04", icon: AlertCircle };
+  return             { text: tx.r_needs,      iconBg: "#ffffff", iconColor: "#ef4444", icon: XCircle };
+};
 
-  const rating = getRatingText(metrics.occupancyRate);
-  const RatingIcon = rating.icon;
+  const rating   = getRating(metrics.occupancyRate);
+  const RIcon    = rating.icon;
+  const occColor = metrics.occupancyRate >= 50 ? "#16a34a" : metrics.occupancyRate >= 30 ? "#ca8a04" : "#ef4444";
 
-  if (loading) {
-    return (
-      <div className="p-8 bg-[#f9fafb] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#581c87] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading performance data...</p>
-        </div>
-      </div>
-    );
-  }
 
-  if (!property) {
-    return (
-      <div className="p-8 bg-[#f9fafb] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Home size={48} className="mx-auto mb-4 text-gray-300" />
-          <p className="text-gray-500">Property not found</p>
-          <button
-            onClick={() => router.push("/owner/properties")}
-            className="mt-4 text-[#581c87] hover:underline"
-          >
-            Back to Properties
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const f   = isRTL ? "'Cairo'" : "'Geist'";
+  const dir = isRTL ? "rtl" : "ltr";
+
+  const css = `
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
+    .pp {
+      --green:#22c55e;--green-bg:#f0fdf4;--green-text:#16a34a;--green-dim:rgba(34,197,94,0.1);
+      --ink:#111827;--ink-2:#374151;--ink-3:#6b7280;--ink-4:#9ca3af;
+      --border:#f3f4f6;--border-2:#e5e7eb;--bg:#f9fafb;--surface:#ffffff;
+      --f:${f},system-ui,sans-serif;
+      font-family:var(--f);direction:${dir};background:var(--bg);min-height:100vh;padding:2rem;color:var(--ink);
+    }
+
+    .pp-back{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-3);font-weight:500;background:none;border:none;cursor:pointer;font-family:var(--f);margin-bottom:1rem;transition:color .12s;${isRTL?"flex-direction:row-reverse;":""}}
+    .pp-back:hover{color:var(--ink);}
+
+    .pp-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;}
+    .pp-title{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
+    .pp-sub{font-size:13px;color:var(--ink-4);margin-top:4px;}
+    .pp-meta{font-size:12px;color:var(--ink-4);margin-top:4px;}
+
+    .pp-year-sel{padding:7px 12px;border:1px solid var(--border-2);border-radius:8px;font-size:13px;font-weight:500;background:var(--surface);color:var(--ink);font-family:var(--f);cursor:pointer;outline:none;transition:border-color .12s;}
+    .pp-year-sel:focus{border-color:var(--green);}
+
+   
+    .pp-score{
+      background:linear-gradient(135deg,#14532d 0%,#166534 60%,#15803d 100%);
+      border-radius:16px;padding:1.5rem 2rem;
+      display:flex;justify-content:space-between;align-items:center;
+      flex-wrap:wrap;gap:1.25rem;margin-bottom:2rem;
+      box-shadow:0 4px 20px rgba(22,163,74,.25);
+      ${isRTL ? "flex-direction:row-reverse;" : ""}
+    }
+    .pp-score-l{display:flex;align-items:center;gap:1.25rem;${isRTL?"flex-direction:row-reverse;":""}}
+    .pp-score-icon{width:60px;height:60px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .pp-score-lbl{font-size:13px;color:rgba(255,255,255,.65);margin-bottom:4px;}
+   
+    .pp-score-txt{font-size:24px;font-weight:700;color:#ffffff;}
+    .pp-score-hint{font-size:12px;color:rgba(255,255,255,.55);margin-top:4px;}
+    .pp-score-r{text-align:${isRTL?"left":"right"};}
+    .pp-score-r-lbl{font-size:13px;color:rgba(255,255,255,.65);}
+    .pp-score-r-val{font-size:32px;font-weight:700;color:#fff;letter-spacing:-.03em;}
+    .pp-score-r-sub{font-size:12px;color:rgba(255,255,255,.55);margin-top:4px;}
+
+    .pp-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem;}
+    @media(max-width:900px){.pp-kpi-grid{grid-template-columns:repeat(2,1fr);}}
+    @media(max-width:480px){.pp-kpi-grid{grid-template-columns:1fr;}}
+    .pp-kpi{background:var(--surface);border:1px solid var(--border-2);border-radius:14px;padding:1.25rem;}
+    .pp-kpi-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;${isRTL?"flex-direction:row-reverse;":""}}
+    .pp-kpi-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;}
+    .pp-kpi-lbl{font-size:11px;color:var(--ink-4);}
+    .pp-kpi-val{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-.02em;}
+    .pp-kpi-sub{font-size:11px;color:var(--ink-4);margin-top:4px;}
+
+    .pp-charts{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:2rem;}
+    @media(max-width:768px){.pp-charts{grid-template-columns:1fr;}}
+    .pp-chart-card{background:var(--surface);border:1px solid var(--border-2);border-radius:16px;padding:1.5rem;}
+    .pp-chart-title{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;${isRTL?"flex-direction:row-reverse;":""}}
+
+    .pp-book-card{background:var(--surface);border:1px solid var(--border-2);border-radius:16px;overflow:hidden;margin-bottom:1.5rem;}
+    .pp-book-head{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);}
+    .pp-book-title{font-size:15px;font-weight:700;color:var(--ink);}
+    .pp-book-sub{font-size:12px;color:var(--ink-4);margin-top:3px;}
+    .pp-book-row{padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;transition:background .1s;${isRTL?"flex-direction:row-reverse;":""}}
+    .pp-book-row:hover{background:var(--bg);}
+    .pp-book-name{font-size:14px;font-weight:600;color:var(--ink);}
+    .pp-book-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;${isRTL?"flex-direction:row-reverse;":""}}
+    .pp-book-badge{font-size:11px;background:var(--bg);color:var(--ink-3);padding:2px 8px;border-radius:999px;border:1px solid var(--border-2);}
+    .pp-book-dot{color:var(--border-2);font-size:11px;}
+    .pp-book-info{font-size:11px;color:var(--ink-4);}
+    .pp-book-date{font-size:11px;color:var(--ink-4);margin-top:3px;}
+    .pp-book-rev{font-size:15px;font-weight:700;color:var(--green-text);text-align:${isRTL?"left":"right"};}
+    .pp-book-month{font-size:11px;color:var(--ink-4);text-align:${isRTL?"left":"right"};margin-top:3px;}
+    .pp-empty{padding:3rem;text-align:center;color:var(--ink-4);display:flex;flex-direction:column;align-items:center;gap:10px;border-top:1px solid var(--border);}
+    .pp-empty-txt{font-size:13px;}
+
+    .pp-insights{background:var(--green-bg);border:1px solid rgba(34,197,94,.2);border-radius:16px;padding:1.5rem;}
+    .pp-ins-title{font-size:14px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;margin-bottom:1rem;${isRTL?"flex-direction:row-reverse;":""}}
+    .pp-ins-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
+    @media(max-width:768px){.pp-ins-grid{grid-template-columns:1fr;}}
+    .pp-ins-box{background:rgba(255,255,255,.7);border-radius:12px;padding:1rem;}
+    .pp-ins-box-title{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px;}
+    .pp-ins-box-text{font-size:12px;color:var(--ink-3);line-height:1.6;}
+
+    .pp-center{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--bg);font-family:var(--f);}
+    .pp-spinner{width:44px;height:44px;border-radius:50%;border:3px solid var(--green-bg);border-top:3px solid var(--green);animation:spin .8s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .pp-center-txt{font-size:13px;color:var(--ink-4);}
+  `;
+
+  if (loading) return (
+    <><style>{css}</style>
+      <div className="pp pp-center">
+        <div className="pp-spinner"/><span className="pp-center-txt">{tx.loading}</span>
+      </div></>
+  );
+
+  if (!property) return (
+    <><style>{css}</style>
+      <div className="pp pp-center">
+        <Home size={48} color="var(--border-2)"/>
+        <span className="pp-center-txt">{tx.notFound}</span>
+        <button className="pp-back" onClick={() => router.push("/owner/properties")}>← {tx.back}</button>
+      </div></>
+  );
 
   return (
-    <div className="p-8 bg-[#f9fafb] min-h-screen">
-      
-      {/* Header */}
-      <div className="mb-6">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-gray-500 hover:text-gray-900 mb-4 transition-colors text-sm font-medium"
-        >
-          <ArrowLeft size={16} /> Back to Properties
-        </button>
-        
-        <div className="flex justify-between items-start flex-wrap gap-4">
+    <><style>{css}</style>
+    <div className="pp">
+
+      {/* Back */}
+      <button className="pp-back" onClick={() => router.back()}>
+        <ArrowLeft size={15} strokeWidth={1.8}/> {tx.back}
+      </button>
+
+      <div className="pp-header">
+        <div>
+          <div className="pp-title">{property.name}</div>
+          <div className="pp-sub">{property.location} · {property.property_type_display}</div>
+          <div className="pp-meta">{property.bedrooms} beds · {property.bathrooms} baths{property.area_sqm && ` · ${property.area_sqm} m²`}</div>
+        </div>
+        <select className="pp-year-sel" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}>
+          <option value={2024}>2024</option>
+          <option value={2025}>2025</option>
+          <option value={2026}>2026</option>
+        </select>
+      </div>
+
+      {/* Score banner */}
+      <div className="pp-score">
+        <div className="pp-score-l">
+         
+          <div className="pp-score-icon" style={{ background: rating.iconBg }}>
+            <RIcon size={28} color={rating.iconColor}/>
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{property.name}</h1>
-            <p className="text-sm text-gray-500 mt-1">{property.location} • {property.property_type_display}</p>
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-xs text-gray-400">{property.bedrooms} beds • {property.bathrooms} baths</span>
-              {property.area_sqm && (
-                <span className="text-xs text-gray-400">• {property.area_sqm} m²</span>
-              )}
-            </div>
+            <div className="pp-score-lbl">{tx.perfRating}</div>
+            <div className="pp-score-txt">{rating.text}</div>
+            <div className="pp-score-hint">{tx.basedOn(metrics.occupancyRate.toFixed(0))}</div>
           </div>
-          <div className="flex gap-3">
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium bg-white"
-            >
-              <option value={2024}>2024</option>
-              <option value={2025}>2025</option>
-              <option value={2026}>2026</option>
-            </select>
-          </div>
+        </div>
+        <div className="pp-score-r">
+          <div className="pp-score-r-lbl">{tx.netProfitLabel(selectedYear)}</div>
+          <div className="pp-score-r-val">{Math.round(metrics.netProfit).toLocaleString()} MAD</div>
+          <div className="pp-score-r-sub">{tx.profitMargin(metrics.profitMargin.toFixed(1))}</div>
         </div>
       </div>
 
-      {/* Performance Score Card */}
-      <div className="mb-8 bg-gradient-to-r from-[#581c87] to-[#7c3aed] rounded-2xl p-6 text-white">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 ${rating.bgColor} rounded-2xl flex items-center justify-center`}>
-              <RatingIcon size={32} className={rating.color} />
-            </div>
-            <div>
-              <p className="text-purple-200 text-sm">Performance Rating</p>
-              <p className={`text-2xl font-bold ${rating.color}`}>
-                {rating.text}
-              </p>
-              <p className="text-purple-200 text-sm mt-1">Based on {metrics.occupancyRate.toFixed(0)}% occupancy</p>
-            </div>
+
+      <div className="pp-kpi-grid">
+        <div className="pp-kpi">
+          <div className="pp-kpi-top">
+            <div className="pp-kpi-icon" style={{background:"var(--green-dim)"}}><Calendar size={18} color="var(--green-text)"/></div>
+            <span className="pp-kpi-lbl">{tx.totalBookings}</span>
           </div>
-          <div className="text-right">
-            <p className="text-purple-200 text-sm">Net Profit ({selectedYear})</p>
-            <p className="text-3xl font-bold">{Math.round(metrics.netProfit).toLocaleString()} MAD</p>
-            <p className="text-purple-200 text-sm mt-1">{metrics.profitMargin.toFixed(1)}% profit margin</p>
+          <div className="pp-kpi-val">{metrics.totalBookings}</div>
+          <div className="pp-kpi-sub">{tx.nightsBooked(metrics.totalNights)}</div>
+        </div>
+        <div className="pp-kpi">
+          <div className="pp-kpi-top">
+            <div className="pp-kpi-icon" style={{background:"#f0fdf4"}}><DollarSign size={18} color="#16a34a"/></div>
+            <span className="pp-kpi-lbl">{tx.avgNight}</span>
           </div>
+          <div className="pp-kpi-val">{Math.round(metrics.avgPricePerNight).toLocaleString()} MAD</div>
+          <div className="pp-kpi-sub">{tx.acrossStays(metrics.totalBookings)}</div>
+        </div>
+        <div className="pp-kpi">
+          <div className="pp-kpi-top">
+            <div className="pp-kpi-icon" style={{background:"#eff6ff"}}><Percent size={18} color="#2563eb"/></div>
+            <span className="pp-kpi-lbl">{tx.occupancy}</span>
+          </div>
+          <div className="pp-kpi-val" style={{color:occColor}}>{metrics.occupancyRate.toFixed(1)}%</div>
+          <div className="pp-kpi-sub">{tx.ofYear(selectedYear)}</div>
+        </div>
+        <div className="pp-kpi">
+          <div className="pp-kpi-top">
+            <div className="pp-kpi-icon" style={{background:"var(--green-dim)"}}><Wallet size={18} color="var(--green-text)"/></div>
+            <span className="pp-kpi-lbl">{tx.netProfitLabel(selectedYear)}</span>
+          </div>
+          <div className="pp-kpi-val" style={{color:"var(--green-text)"}}>{Math.round(metrics.netProfit).toLocaleString()} MAD</div>
+          <div className="pp-kpi-sub">{tx.revenueLabel(Math.round(metrics.totalRevenue).toLocaleString())}</div>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex justify-between items-start mb-3">
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <Calendar size={20} className="text-[#581c87]" />
-            </div>
-            <span className="text-xs text-gray-400">Total Bookings</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{metrics.totalBookings}</p>
-          <p className="text-xs text-gray-500 mt-1">{metrics.totalNights} nights booked</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex justify-between items-start mb-3">
-            <div className="p-2 bg-green-50 rounded-lg">
-              <DollarSign size={20} className="text-green-600" />
-            </div>
-            <span className="text-xs text-gray-400">Avg Price / Night</span>
-          </div>
-          <p className="text-2xl font-bold text-gray-900">{Math.round(metrics.avgPricePerNight).toLocaleString()} MAD</p>
-          <p className="text-xs text-gray-500 mt-1">Across {metrics.totalBookings} stays</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex justify-between items-start mb-3">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Percent size={20} className="text-blue-600" />
-            </div>
-            <span className="text-xs text-gray-400">Occupancy Rate</span>
-          </div>
-          <p className={`text-2xl font-bold ${
-            metrics.occupancyRate >= 50 ? 'text-green-600' : 
-            metrics.occupancyRate >= 30 ? 'text-yellow-600' : 'text-red-500'
-          }`}>
-            {metrics.occupancyRate.toFixed(1)}%
-          </p>
-          <p className="text-xs text-gray-500 mt-1">of {selectedYear}</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex justify-between items-start mb-3">
-            <div className="p-2 bg-orange-50 rounded-lg">
-              <Wallet size={20} className="text-orange-600" />
-            </div>
-            <span className="text-xs text-gray-400">Net Profit</span>
-          </div>
-          <p className="text-2xl font-bold text-[#581c87]">{Math.round(metrics.netProfit).toLocaleString()} MAD</p>
-          <p className="text-xs text-gray-500 mt-1">
-            Revenue: {Math.round(metrics.totalRevenue).toLocaleString()} MAD
-          </p>
-        </div>
-      </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        
-        {/* Revenue Chart */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="font-bold text-gray-900">Monthly Revenue</h2>
-            <TrendingUp size={18} className="text-gray-400" />
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
+      {/* Charts */}
+      <div className="pp-charts">
+        <div className="pp-chart-card">
+          <div className="pp-chart-title">{tx.monthlyRevenue}<TrendingUp size={16} color="var(--ink-4)"/></div>
+          <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlyChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#9ca3af" }} />
-              <YAxis tick={{ fontSize: 12, fill: "#9ca3af" }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} MAD`, 'Revenue']} />
-              <Bar dataKey="revenue" fill="#581c87" radius={[8, 8, 0, 0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
+              <XAxis dataKey="month" tick={{fontSize:11,fill:"#9ca3af"}}/>
+              <YAxis tick={{fontSize:11,fill:"#9ca3af"}} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
+              <Tooltip formatter={v=>[`${Number(v).toLocaleString()} MAD`, lang==="ar"?"الإيرادات":"Revenus"]}/>
+              <Bar dataKey="revenue" fill="#22c55e" radius={[6,6,0,0]}/>
             </BarChart>
           </ResponsiveContainer>
         </div>
-
-        {/* Platform Distribution */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="font-bold text-gray-900">Booking Sources</h2>
-            <Briefcase size={18} className="text-gray-400" />
-          </div>
+        <div className="pp-chart-card">
+          <div className="pp-chart-title">{tx.bookingSources}<Briefcase size={16} color="var(--ink-4)"/></div>
           {platformData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie
-                  data={platformData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={5}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {platformData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
+                <Pie data={platformData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={4} dataKey="value"
+                  label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`}>
+                  {platformData.map((_,i)=><Cell key={i} fill={COLORS[i%COLORS.length]}/>)}
                 </Pie>
-                <Tooltip />
+                <Tooltip/>
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[280px] flex items-center justify-center text-gray-400">
-              <div className="text-center">
-                <Briefcase size={48} className="mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No booking data available</p>
-              </div>
+            <div style={{height:260,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,color:"var(--ink-4)"}}>
+              <Briefcase size={40} color="var(--border-2)"/>
+              <span style={{fontSize:13}}>{tx.noBookingData}</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* Recent Bookings */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
-          <h2 className="font-bold text-gray-900">Recent Bookings</h2>
-          <p className="text-sm text-gray-400 mt-1">Latest guest stays</p>
+      {/* Recent bookings */}
+      <div className="pp-book-card">
+        <div className="pp-book-head">
+          <div className="pp-book-title">{tx.recentBookings}</div>
+          <div className="pp-book-sub">{tx.latestStays}</div>
         </div>
-        <div className="divide-y divide-gray-100">
-          {bookings.slice(0, 10).map((booking) => (
-            <div key={booking.id} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-semibold text-gray-900">{booking.guest_name || 'Guest'}</p>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
-                    <span className="px-2 py-0.5 bg-gray-100 rounded-full">{booking.booking_source || 'Direct'}</span>
-                    <span>•</span>
-                    <span>{booking.nights || 1} nights</span>
-                    <span>•</span>
-                    <span>{booking.price_per_night} MAD/night</span>
-                  </div>
-                  {booking.check_in && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      {booking.check_in} → {booking.check_out}
-                    </p>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-[#581c87]">{Number(booking.revenue).toLocaleString()} MAD</p>
-                  <p className="text-xs text-gray-400 mt-1">{booking.month_display} {booking.year}</p>
-                </div>
+        {bookings.length > 0 ? bookings.slice(0,10).map(b=>(
+          <div key={b.id} className="pp-book-row">
+            <div>
+              <div className="pp-book-name">{b.guest_name||"Guest"}</div>
+              <div className="pp-book-meta">
+                <span className="pp-book-badge">{b.booking_source||"Direct"}</span>
+                <span className="pp-book-dot">·</span>
+                <span className="pp-book-info">{b.nights||1} {lang==="ar"?"ليلة":"nuits"}</span>
+                <span className="pp-book-dot">·</span>
+                <span className="pp-book-info">{b.price_per_night} {tx.perNight}</span>
               </div>
+              {b.check_in&&<div className="pp-book-date">{b.check_in} → {b.check_out}</div>}
             </div>
-          ))}
-          {bookings.length === 0 && (
-            <div className="p-12 text-center text-gray-400">
-              <Calendar size={48} className="mx-auto mb-3 opacity-30" />
-              <p>No bookings recorded for {selectedYear}</p>
+            <div>
+              <div className="pp-book-rev">{Number(b.revenue).toLocaleString()} MAD</div>
+              <div className="pp-book-month">{b.month_display} {b.year}</div>
             </div>
-          )}
+          </div>
+        )) : (
+          <div className="pp-empty">
+            <Calendar size={40} color="var(--border-2)"/>
+            <span className="pp-empty-txt">{tx.noBookings(selectedYear)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Insights */}
+      <div className="pp-insights">
+        <div className="pp-ins-title"><BarChart3 size={16} color="var(--green-text)"/>{tx.insights}</div>
+        <div className="pp-ins-grid">
+          <div className="pp-ins-box">
+            <div className="pp-ins-box-title">{tx.occ_title}</div>
+            <div className="pp-ins-box-text">
+              {metrics.occupancyRate>=60?tx.occ_excellent:metrics.occupancyRate>=40?tx.occ_good:tx.occ_low}
+            </div>
+          </div>
+          <div className="pp-ins-box">
+            <div className="pp-ins-box-title">{tx.price_title}</div>
+            <div className="pp-ins-box-text">
+              {tx.price_avg(Math.round(metrics.avgPricePerNight).toLocaleString())}
+              {metrics.avgPricePerNight>600?tx.price_premium:metrics.avgPricePerNight>350?tx.price_mid:tx.price_low}
+            </div>
+          </div>
+          <div className="pp-ins-box">
+            <div className="pp-ins-box-title">{tx.opp_title}</div>
+            <div className="pp-ins-box-text">
+              {tx.opp_text(Math.round((365-metrics.totalNights)*metrics.avgPricePerNight*0.85).toLocaleString())}
+              {metrics.occupancyRate<50&&tx.opp_focus}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Performance Insights */}
-      <div className="mt-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-6 border border-blue-100">
-        <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <BarChart3 size={18} className="text-[#581c87]" />
-          Performance Insights
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div className="bg-white/50 rounded-xl p-3">
-            <p className="font-medium text-gray-800 mb-1">📊 Occupancy Analysis</p>
-            <p className="text-gray-600 text-xs">
-              {metrics.occupancyRate >= 60 
-                ? "✓ Excellent occupancy! Your property is in high demand. Consider raising prices during peak seasons."
-                : metrics.occupancyRate >= 40
-                ? "ℹ️ Good occupancy rate. Optimize your listing photos and description to attract more bookings."
-                : "⚠️ Low occupancy detected. Review your pricing strategy, improve listing quality, or adjust availability."}
-            </p>
-          </div>
-          <div className="bg-white/50 rounded-xl p-3">
-            <p className="font-medium text-gray-800 mb-1">💰 Pricing Strategy</p>
-            <p className="text-gray-600 text-xs">
-              Average {Math.round(metrics.avgPricePerNight).toLocaleString()} MAD/night
-              {metrics.avgPricePerNight > 600 
-                ? " - Premium positioning. Your property appeals to luxury travelers. Keep up the quality!"
-                : metrics.avgPricePerNight > 350
-                ? " - Competitive pricing. Consider adding amenities to justify rate increases."
-                : " - Below market rate. You might be undervaluing your property."}
-            </p>
-          </div>
-          <div className="bg-white/50 rounded-xl p-3">
-            <p className="font-medium text-gray-800 mb-1">🎯 Revenue Opportunity</p>
-            <p className="text-gray-600 text-xs">
-              {Math.round((365 - metrics.totalNights) * metrics.avgPricePerNight * 0.85).toLocaleString()} MAD 
-              potential from unbooked nights
-              {metrics.occupancyRate < 50 && " - Focus on improving visibility and ratings."}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+    </div></>
   );
 }
