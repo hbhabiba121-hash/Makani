@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Bell, ChevronDown, LogOut, Settings, User } from "lucide-react";
+import { Bell, ChevronDown, LogOut, Settings, User, Globe, Check } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { getCurrentUser } from "@/lib/axios";
 
@@ -29,6 +29,12 @@ const i18n = {
       "/dashboard/settings":     { title: "Paramètres",      sub: "Configurez votre espace de travail." },
       "/dashboard/security":     { title: "Sécurité",        sub: "Gérez les accès et la sécurité." },
       "/dashboard/help":         { title: "Centre d'aide",   sub: "Besoin d'aide ? Consultez notre documentation." },
+      "/owner":                  { title: "Tableau de bord", sub: "Aperçu complet de vos propriétés." },
+      "/owner/properties":       { title: "Mes Propriétés",  sub: "Gérez et suivez votre portefeuille." },
+      "/owner/earnings":         { title: "Revenus",         sub: "Suivez vos gains et commissions." },
+      "/owner/reports":          { title: "Rapports",        sub: "Consultez vos rapports financiers." },
+      "/owner/settings":         { title: "Paramètres",      sub: "Configurez votre espace." },
+      "/owner/profile":          { title: "Mon profil",      sub: "Gérez vos informations personnelles." },
     } as Record<string, { title: string; sub: string }>,
     profile:  "Mon profil",
     settings: "Paramètres",
@@ -51,6 +57,12 @@ const i18n = {
       "/dashboard/settings":     { title: "الإعدادات",     sub: "اضبط إعدادات مساحة عملك." },
       "/dashboard/security":     { title: "الأمان",        sub: "إدارة الوصول والأمان." },
       "/dashboard/help":         { title: "مركز المساعدة", sub: "تحتاج مساعدة؟ راجع التوثيق." },
+      "/owner":                  { title: "لوحة التحكم",   sub: "نظرة شاملة على عقاراتك." },
+      "/owner/properties":       { title: "عقاراتي",       sub: "تتبع وإدارة محفظتك العقارية." },
+      "/owner/earnings":         { title: "الإيرادات",     sub: "تتبع أرباحك وعمولاتك." },
+      "/owner/reports":          { title: "التقارير",      sub: "استعرض تقاريرك المالية." },
+      "/owner/settings":         { title: "الإعدادات",     sub: "اضبط إعدادات مساحة عملك." },
+      "/owner/profile":          { title: "ملفي الشخصي",   sub: "إدارة معلوماتك الشخصية." },
     } as Record<string, { title: string; sub: string }>,
     profile:  "ملفي الشخصي",
     settings: "الإعدادات",
@@ -73,11 +85,14 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
   const [user, setUser]         = useState<UserType | null>(null);
   const [loading, setLoading]   = useState(true);
   const [dropOpen, setDropOpen] = useState(false);
+  const [langDropOpen, setLangDropOpen] = useState(false);
   const dropRef  = useRef<HTMLDivElement>(null);
+  const langDropRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const tx       = i18n[lang];
   const isRTL    = lang === "ar";
 
+  // Get dynamic page title based on current path
   const page = tx.pages[pathname] ?? { title: "Dashboard", sub: "" };
 
   useEffect(() => {
@@ -89,10 +104,13 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
     document.documentElement.setAttribute("lang", lang);
   }, [lang, isRTL]);
 
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const fn = (e: MouseEvent) => {
       if (dropRef.current && !dropRef.current.contains(e.target as Node))
         setDropOpen(false);
+      if (langDropRef.current && !langDropRef.current.contains(e.target as Node))
+        setLangDropOpen(false);
     };
     document.addEventListener("mousedown", fn);
     return () => document.removeEventListener("mousedown", fn);
@@ -103,13 +121,6 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
     if (user.first_name && user.last_name)
       return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase();
     return user.email[0].toUpperCase();
-  };
-
-  const displayName = () => {
-    if (!user) return "—";
-    if (user.full_name?.trim()) return user.full_name;
-    if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
-    return user.email.split("@")[0];
   };
 
   return (
@@ -138,7 +149,6 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           background: var(--surface);
           border-bottom: 1px solid var(--border-2);
           display: flex; align-items: center;
-          /* Offset for sidebar width */
           padding: 0 1.75rem;
           gap: 1rem;
         }
@@ -158,35 +168,87 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
 
         /* Right cluster */
         .nb-right {
-          display: flex; align-items: center; gap: 6px;
+          display: flex; align-items: center; gap: 12px;
           margin-${isRTL ? "right" : "left"}: auto;
         }
 
-        /* Lang toggle — pill like the image's Week/Month toggle */
-        .nb-lang {
-          display: flex; align-items: center;
+        /* Language selector - Globe icon style */
+        .nb-lang-container {
+          position: relative;
+        }
+        
+        .nb-lang-trigger {
+          display: flex; align-items: center; gap: 6px;
+          padding: 6px 12px;
+          background: var(--bg);
           border: 1px solid var(--border-2);
           border-radius: 8px;
-          overflow: hidden;
-          margin-${isRTL ? "left" : "right"}: 4px;
-        }
-        .nb-lang-btn {
-          padding: 5px 11px;
-          font-size: 12px; font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
           font-family: var(--f);
-          border: none; background: none;
-          color: var(--ink-3); cursor: pointer;
-          transition: background 0.12s, color 0.12s;
-          line-height: 1;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--ink-2);
         }
-        .nb-lang-btn:first-child {
-          border-${isRTL ? "left" : "right"}: 1px solid var(--border-2);
+        
+        .nb-lang-trigger:hover {
+          background: var(--border);
+          border-color: var(--green);
         }
-        .nb-lang-btn.on {
-          background: var(--green);
-          color: #fff;
+        
+        /* Language dropdown */
+        .nb-lang-dropdown {
+          position: absolute;
+          top: calc(100% + 8px);
+          ${isRTL ? "left: 0" : "right: 0"};
+          min-width: 160px;
+          background: var(--surface);
+          border: 1px solid var(--border-2);
+          border-radius: 10px;
+          box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+          padding: 4px;
+          z-index: 100;
+          opacity: 0;
+          transform: translateY(-6px);
+          pointer-events: none;
+          transition: opacity 0.2s, transform 0.2s;
         }
-        .nb-lang-btn:not(.on):hover { background: var(--bg); color: var(--ink-2); }
+        
+        .nb-lang-dropdown.open {
+          opacity: 1;
+          transform: translateY(0);
+          pointer-events: all;
+        }
+        
+        .nb-lang-option {
+          display: flex; align-items: center; gap: 10px;
+          padding: 8px 12px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: background 0.12s;
+          font-size: 13px;
+          color: var(--ink-2);
+          ${isRTL ? "flex-direction: row-reverse; text-align: right" : ""};
+        }
+        
+        .nb-lang-option:hover {
+          background: var(--bg);
+        }
+        
+        .nb-lang-option.active {
+          background: var(--green-dim);
+          color: var(--green);
+        }
+        
+        .nb-lang-option .check-icon {
+          margin-${isRTL ? "right" : "left"}: auto;
+          opacity: 0;
+          transition: opacity 0.12s;
+        }
+        
+        .nb-lang-option.active .check-icon {
+          opacity: 1;
+        }
 
         /* Bell */
         .nb-bell {
@@ -196,72 +258,96 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           background: none; cursor: pointer;
           display: flex; align-items: center; justify-content: center;
           color: var(--ink-3); position: relative;
-          transition: background 0.12s, color 0.12s;
+          transition: all 0.2s ease;
         }
-        .nb-bell:hover { background: var(--bg); color: var(--ink-2); }
+        .nb-bell:hover { 
+          background: var(--bg); 
+          color: var(--ink-2);
+          border-color: var(--green);
+        }
         .nb-bell-dot {
           position: absolute; top: 6px;
           ${isRTL ? "left: 7px" : "right: 7px"};
           width: 7px; height: 7px;
           background: #ef4444; border-radius: 50%;
           border: 1.5px solid #fff;
+          animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+          0% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.2); opacity: 0.8; }
+          100% { transform: scale(1); opacity: 1; }
         }
 
-        /* Avatar — circular with photo/initials, border ring */
+        /* Profile section - Avatar only */
+        .nb-profile {
+          position: relative;
+        }
+        
+        .nb-profile-trigger {
+          display: flex; align-items: center;
+          padding: 0;
+          background: none;
+          border: none;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        /* Avatar */
         .nb-avatar-wrap {
           width: 36px; height: 36px;
           border-radius: 50%;
-          border: 2px solid var(--border-2);
-          overflow: hidden; cursor: pointer;
-          transition: border-color 0.12s;
+          overflow: hidden;
           flex-shrink: 0;
+          border: 2px solid var(--border-2);
+          transition: border-color 0.2s ease;
         }
-        .nb-avatar-wrap:hover { border-color: var(--green); }
+        
+        .nb-profile-trigger:hover .nb-avatar-wrap {
+          border-color: var(--green);
+        }
+        
         .nb-avatar-inner {
           width: 100%; height: 100%;
-          background: var(--green-dim);
+          background: linear-gradient(135deg, var(--green) 0%, #16a34a 100%);
           display: flex; align-items: center; justify-content: center;
-          font-size: 12px; font-weight: 600; color: var(--green);
+          font-size: 14px; font-weight: 600; color: white;
         }
-
-        /* User button (avatar + name + chevron) */
-        .nb-user {
-          display: flex; align-items: center; gap: 8px;
-          border: none; background: none; cursor: pointer;
-          font-family: var(--f); padding: 0;
-          ${isRTL ? "flex-direction: row-reverse" : ""};
-        }
-
+        
         /* Dropdown */
         .nb-drop {
           position: absolute;
-          top: calc(100% + 10px);
+          top: calc(100% + 8px);
           ${isRTL ? "left: 0" : "right: 0"};
-          width: 210px;
+          width: 240px;
           background: var(--surface);
           border: 1px solid var(--border-2);
           border-radius: 12px;
-          box-shadow: 0 8px 30px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
-          padding: 6px;
+          box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+          padding: 8px;
           z-index: 100;
-          opacity: 0; transform: translateY(-6px) scale(0.97);
+          opacity: 0;
+          transform: translateY(-6px) scale(0.97);
           pointer-events: none;
-          transition: opacity 0.15s, transform 0.15s;
+          transition: opacity 0.2s, transform 0.2s;
         }
+        
         .nb-drop.open {
-          opacity: 1; transform: translateY(0) scale(1);
+          opacity: 1;
+          transform: translateY(0) scale(1);
           pointer-events: all;
         }
 
         .nb-drop-head {
-          padding: 8px 10px 10px;
+          padding: 8px 8px 12px;
           border-bottom: 1px solid var(--border);
-          margin-bottom: 4px;
+          margin-bottom: 8px;
           ${isRTL ? "text-align: right" : ""};
         }
-        .nb-drop-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+        .nb-drop-name { font-size: 14px; font-weight: 600; color: var(--ink); }
         .nb-drop-email {
-          font-size: 11px; color: var(--ink-3); margin-top: 2px;
+          font-size: 11px; color: var(--ink-3); margin-top: 4px;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .nb-drop-role {
@@ -271,29 +357,34 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           background: var(--green-dim);
           border: 1px solid rgba(34,197,94,0.2);
           border-radius: 4px;
-          padding: 1.5px 6px;
+          padding: 2px 6px;
         }
 
         .nb-drop-item {
-          display: flex; align-items: center; gap: 9px;
-          padding: 8px 10px; border-radius: 8px;
+          display: flex; align-items: center; gap: 12px;
+          padding: 10px 12px; border-radius: 8px;
           font-size: 13px; color: var(--ink-2);
           cursor: pointer; border: none; background: none;
           width: 100%; font-family: var(--f); text-decoration: none;
-          transition: background 0.12s, color 0.12s;
+          transition: all 0.12s;
           ${isRTL ? "flex-direction: row-reverse; text-align: right" : ""};
         }
-        .nb-drop-item:hover { background: var(--bg); color: var(--ink); }
+        .nb-drop-item:hover { 
+          background: var(--bg); 
+          color: var(--ink); 
+          transform: translateX(${isRTL ? "-2px" : "2px"}); 
+        }
         .nb-drop-item.red { color: #ef4444; }
         .nb-drop-item.red:hover { background: #fef2f2; }
 
-        .nb-drop-line { height: 1px; background: var(--border); margin: 4px 0; }
+        .nb-drop-line { height: 1px; background: var(--border); margin: 8px 0; }
 
         /* Skeleton */
         .nb-skel {
-          height: 36px; width: 36px; border-radius: 50%;
+          width: 36px; height: 36px;
           background: linear-gradient(90deg,#f0f0ee 25%,#e6e6e2 50%,#f0f0ee 75%);
           background-size: 200% 100%;
+          border-radius: 50%;
           animation: nbsk 1.4s infinite;
         }
         @keyframes nbsk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
@@ -301,7 +392,7 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
 
       <header className="nb">
 
-        {/* Page title */}
+        {/* Dynamic Page Title - changes based on current route */}
         <div className="nb-title">
           <div className="nb-title-h">{page.title}</div>
           {page.sub && <div className="nb-title-sub">{page.sub}</div>}
@@ -310,10 +401,32 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
         {/* Right */}
         <div className="nb-right">
 
-          {/* Language switcher */}
-          <div className="nb-lang">
-            <button className={`nb-lang-btn${lang === "fr" ? " on" : ""}`} onClick={() => onLangChange?.("fr")}>FR</button>
-            <button className={`nb-lang-btn${lang === "ar" ? " on" : ""}`} onClick={() => onLangChange?.("ar")}>ع</button>
+          {/* Language selector with icon and dropdown */}
+          <div className="nb-lang-container" ref={langDropRef}>
+            <button className="nb-lang-trigger" onClick={() => setLangDropOpen(v => !v)}>
+              <Globe size={14} strokeWidth={1.8} />
+              <span>{lang === "fr" ? "FR" : "AR"}</span>
+              <ChevronDown size={12} className={`nb-chevron ${langDropOpen ? 'rotated' : ''}`} />
+            </button>
+            
+            <div className={`nb-lang-dropdown${langDropOpen ? " open" : ""}`}>
+              <div 
+                className={`nb-lang-option ${lang === "fr" ? "active" : ""}`}
+                onClick={() => { onLangChange?.("fr"); setLangDropOpen(false); }}
+              >
+                <span>🇫🇷</span>
+                <span>{tx.fr}</span>
+                <Check size={14} className="check-icon" />
+              </div>
+              <div 
+                className={`nb-lang-option ${lang === "ar" ? "active" : ""}`}
+                onClick={() => { onLangChange?.("ar"); setLangDropOpen(false); }}
+              >
+                <span>🇸🇦</span>
+                <span>{tx.ar}</span>
+                <Check size={14} className="check-icon" />
+              </div>
+            </div>
           </div>
 
           {/* Bell */}
@@ -322,12 +435,12 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
             <span className="nb-bell-dot" />
           </button>
 
-          {/* User */}
+          {/* User Profile - Avatar only */}
           {loading ? (
             <div className="nb-skel" />
           ) : (
-            <div ref={dropRef} style={{ position: "relative" }}>
-              <button className="nb-user" onClick={() => setDropOpen(v => !v)}>
+            <div className="nb-profile" ref={dropRef}>
+              <button className="nb-profile-trigger" onClick={() => setDropOpen(v => !v)}>
                 <div className="nb-avatar-wrap">
                   <div className="nb-avatar-inner">{initials()}</div>
                 </div>
@@ -335,17 +448,19 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
 
               <div className={`nb-drop${dropOpen ? " open" : ""}`}>
                 <div className="nb-drop-head">
-                  <div className="nb-drop-name">{displayName()}</div>
+                  <div className="nb-drop-name">{user?.full_name || `${user?.first_name} ${user?.last_name}` || user?.email}</div>
                   <div className="nb-drop-email">{user?.email}</div>
                   <span className="nb-drop-role">
                     {tx.roles[user?.role ?? ""] ?? user?.role}
                   </span>
                 </div>
-                <a href="/dashboard/profile" className="nb-drop-item">
-                  <User size={14} strokeWidth={1.8} />{tx.profile}
+                <a href={`/${pathname.split('/')[1]}/profile`} className="nb-drop-item">
+                  <User size={14} strokeWidth={1.8} />
+                  <span>{tx.profile}</span>
                 </a>
-                <a href="/dashboard/settings" className="nb-drop-item">
-                  <Settings size={14} strokeWidth={1.8} />{tx.settings}
+                <a href={`/${pathname.split('/')[1]}/settings`} className="nb-drop-item">
+                  <Settings size={14} strokeWidth={1.8} />
+                  <span>{tx.settings}</span>
                 </a>
                 <div className="nb-drop-line" />
                 <button
@@ -357,7 +472,8 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
                     window.location.href = "/login";
                   }}
                 >
-                  <LogOut size={14} strokeWidth={1.8} />{tx.logout}
+                  <LogOut size={14} strokeWidth={1.8} />
+                  <span>{tx.logout}</span>
                 </button>
               </div>
             </div>
