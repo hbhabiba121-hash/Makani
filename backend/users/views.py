@@ -1,32 +1,30 @@
 # views.py - FULLY CORRECTED VERSION
 
-# Add these imports at the top
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from .models import User
-from .serializers import UserSerializer
-from agencies.models import Agency
-from .invite_utils import send_invite_email
-import random
-import string
+from django.contrib.auth import authenticate
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_decode
+from django.utils.encoding import force_str
 from rest_framework import status, generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
-from django.contrib.auth import authenticate
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_decode
-from django.utils.encoding import force_str
+from rest_framework import viewsets
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+import random
+import string
+
 from .models import User
 from .serializers import (
     UserSerializer, UserRegistrationSerializer, 
     ChangePasswordSerializer
 )
 from .permissions import IsAdmin, IsStaffOrAdmin, IsOwnerUser
-from rest_framework import viewsets, permissions
-from .models import User
-from .serializers import UserSerializer
+from agencies.models import Agency
+
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -175,7 +173,6 @@ class ForgotPasswordView(APIView):
         
         try:
             user = User.objects.get(email=email)
-            # Import here to avoid circular import
             from .utils import send_password_reset_email
             send_password_reset_email(user, request)
         except User.DoesNotExist:
@@ -205,7 +202,6 @@ class ResetPasswordView(APIView):
                 'error': 'Passwords do not match'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Import here to avoid circular import
         from .utils import validate_reset_token
         user = validate_reset_token(uidb64, token)
         
@@ -319,7 +315,6 @@ class CreateUserByAgencyAdminView(APIView):
             agency_id = request.data.get('agency_id')
             if agency_id:
                 try:
-                    from agencies.models import Agency
                     agency = Agency.objects.get(id=agency_id)
                 except:
                     return Response({
@@ -359,8 +354,6 @@ class CreateUserByAgencyAdminView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Generate random password
-        import random
-        import string
         temp_password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
         
         # Create user
@@ -472,7 +465,7 @@ class CreateStaffView(APIView):
             return Response({
                 "message": "Staff member created successfully",
                 "user": UserSerializer(staff).data,
-                "temp_password": temp_password  # Send temp password to frontend
+                "temp_password": temp_password
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
@@ -492,10 +485,7 @@ class StaffListView(APIView):
 
         # Check if user has an agency
         if not user.agency:
-            return Response(
-                [],  # Return empty list instead of error
-                status=status.HTTP_200_OK
-            )
+            return Response([], status=status.HTTP_200_OK)
 
         # Get all staff members in the same agency
         staff_members = User.objects.filter(
@@ -593,5 +583,231 @@ class StaffDeleteView(APIView):
 
         return Response(
             {"message": "Staff member deleted successfully"}, 
+            status=status.HTTP_200_OK
+        )
+
+
+# ===================== PROFILE PICTURE VIEWS =====================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_current_user(request):
+    """Get current authenticated user's data"""
+    serializer = UserSerializer(request.user)
+    return Response(serializer.data)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    """Update user profile - works for all user types"""
+    user = request.user
+    serializer = UserSerializer(user, data=request.data, partial=True)
+    
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=400)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_profile_picture(request):
+    """Upload profile picture - works for all user types"""
+    if 'picture' not in request.FILES:
+        return Response({'error': 'No picture provided'}, status=400)
+    
+    user = request.user
+    user.picture = request.FILES['picture']
+    user.save()
+    
+    serializer = UserSerializer(user)
+    return Response(serializer.data)
+
+# users/views.py - Add this view
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_staff_picture(request, staff_id):
+    """Upload profile picture for a staff member"""
+    try:
+        staff = User.objects.get(id=staff_id, role='staff')
+    except User.DoesNotExist:
+        return Response({'error': 'Staff member not found'}, status=404)
+    
+    if 'picture' not in request.FILES:
+        return Response({'error': 'No picture provided'}, status=400)
+    
+    staff.picture = request.FILES['picture']
+    staff.save()
+    
+    serializer = UserSerializer(staff)
+    return Response(serializer.data)
+
+# users/views.py - Remove the first CreateStaffView (without phone) and keep this one:
+
+class CreateStaffView(APIView):
+    """Create a new staff member under the same agency"""
+    
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        # Check if user has an agency
+        if not user.agency:
+            return Response(
+                {"error": "No agency linked to your account"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if user has permission
+        if user.role not in ["admin", "staff"]:
+            return Response(
+                {"error": "You don't have permission to create staff members"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Get data from request
+        email = request.data.get("email")
+        first_name = request.data.get("first_name")
+        last_name = request.data.get("last_name")
+        phone = request.data.get("phone", "")
+
+        # Validate required fields
+        if not all([email, first_name, last_name]):
+            return Response(
+                {"error": "Email, first name, and last name are required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if email already exists
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {"error": "A user with this email already exists"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Generate random temporary password
+        temp_password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+
+        # Create the staff user
+        try:
+            staff = User.objects.create_user(
+                email=email,
+                password=temp_password,
+                first_name=first_name,
+                last_name=last_name,
+                role="staff",
+                agency=user.agency,
+                phone=phone
+            )
+
+            return Response({
+                "message": "Staff member created successfully",
+                "user": UserSerializer(staff).data,
+                "temp_password": temp_password
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to create staff member: {str(e)}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class StaffDetailView(APIView):
+    """Update a specific staff member's details"""
+    
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        user = request.user
+
+        if not user.agency:
+            return Response(
+                {"error": "No agency linked to your account"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            staff = User.objects.get(pk=pk, role="staff", agency=user.agency)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Staff member not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Update fields
+        if 'first_name' in request.data:
+            staff.first_name = request.data['first_name']
+        
+        if 'last_name' in request.data:
+            staff.last_name = request.data['last_name']
+        
+        if 'phone' in request.data:
+            staff.phone = request.data['phone']
+            print(f"DEBUG: Updating phone for {staff.email} to: {staff.phone}")  # Debug log
+        
+        if 'email' in request.data:
+            new_email = request.data['email']
+            if User.objects.exclude(pk=pk).filter(email=new_email).exists():
+                return Response(
+                    {"error": "A user with this email already exists"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            staff.email = new_email
+
+        staff.save()
+
+        # Return updated data
+        serializer = UserSerializer(staff)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    
+class StaffDetailView(APIView):
+    """Update a specific staff member's details"""
+    
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        user = request.user
+
+        if not user.agency:
+            return Response(
+                {"error": "No agency linked to your account"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            staff = User.objects.get(pk=pk, role="staff", agency=user.agency)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Staff member not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Update fields
+        if 'first_name' in request.data:
+            staff.first_name = request.data['first_name']
+        
+        if 'last_name' in request.data:
+            staff.last_name = request.data['last_name']
+        
+        if 'phone' in request.data:  # ADD THIS
+            staff.phone = request.data['phone']
+        
+        if 'email' in request.data:
+            new_email = request.data['email']
+            if User.objects.exclude(pk=pk).filter(email=new_email).exists():
+                return Response(
+                    {"error": "A user with this email already exists"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            staff.email = new_email
+
+        staff.save()
+
+        return Response(
+            UserSerializer(staff).data, 
             status=status.HTTP_200_OK
         )

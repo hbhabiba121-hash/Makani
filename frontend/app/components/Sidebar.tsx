@@ -136,9 +136,9 @@ export default function Sidebar({ lang = "fr", onCollapseChange }: SidebarProps)
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
 
         .sb {
-          --green:        #22c55e;
+          --green:        #19c157;
           --green-bg:     #f0fdf4;
-          --green-text:   #16a34a;
+          --green-text:   #108e3e;
           --ink:          #111827;
           --ink-2:        #374151;
           --ink-3:        #9ca3af;

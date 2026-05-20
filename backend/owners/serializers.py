@@ -1,4 +1,5 @@
-# owners/serializers.py
+# owners/serializers.py - COMPLETE FIXED VERSION
+
 from rest_framework import serializers
 from .models import Owner
 from users.serializers import UserSerializer
@@ -8,13 +9,14 @@ class OwnerSerializer(serializers.ModelSerializer):
 
     full_name = serializers.SerializerMethodField(method_name='getFullName')
     email = serializers.SerializerMethodField(method_name='getEmail')
+    picture_url = serializers.SerializerMethodField(method_name='getPictureUrl')
     user_details = UserSerializer(source='user', read_only=True)
 
     class Meta:
         model = Owner
         fields = [
             'id', 'full_name', 'email', 'phone', 'address',
-            'user_details', 'created_at', 'updated_at'
+            'user_details', 'created_at', 'updated_at', 'picture', 'picture_url'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -25,6 +27,12 @@ class OwnerSerializer(serializers.ModelSerializer):
     def getEmail(self, obj):
         """Return owner email from linked user."""
         return obj.user.email
+    
+    def getPictureUrl(self, obj):
+        """Return owner profile picture URL."""
+        if obj.picture and hasattr(obj.picture, 'url'):
+            return obj.picture.url
+        return None
     
 
 class CreateOwnerSerializer(serializers.ModelSerializer):

@@ -1,11 +1,15 @@
 # owners/views.py - COMPLETE WORKING VERSION (CREATE, UPDATE, DELETE)
+
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes  # ADD THIS LINE
+from rest_framework.permissions import IsAuthenticated  # ADD THIS LINE
 from django.db import transaction
 from .models import Owner
 from .serializers import OwnerSerializer, CreateOwnerSerializer
 from users.models import User
 from agencies.models import Agency
+
 
 class OwnerViewSet(viewsets.ModelViewSet):
     queryset = Owner.objects.all()
@@ -170,3 +174,22 @@ class OwnerViewSet(viewsets.ModelViewSet):
                 {"error": f"Failed to delete owner: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_owner_picture(request, owner_id):
+    """Upload profile picture for an owner"""
+    try:
+        owner = Owner.objects.get(id=owner_id)
+    except Owner.DoesNotExist:
+        return Response({'error': 'Owner not found'}, status=404)
+    
+    if 'picture' not in request.FILES:
+        return Response({'error': 'No picture provided'}, status=400)
+    
+    owner.picture = request.FILES['picture']
+    owner.save()
+    
+    serializer = OwnerSerializer(owner)
+    return Response(serializer.data)

@@ -1,6 +1,9 @@
+# users/serializers.py - COMPLETE FIXED VERSION
+
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import User
+
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model - follows CypHX naming conventions"""
@@ -8,14 +11,16 @@ class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
     agency_name = serializers.SerializerMethodField()
     agency_id = serializers.SerializerMethodField()
+    picture_url = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name', 'full_name',
-            'role', 'is_active', 'created_at', 'agency', 'agency_id', 'agency_name'
+            'role', 'is_active', 'created_at', 'agency', 'agency_id', 
+            'agency_name', 'picture', 'picture_url', 'phone'  # ADD 'phone' HERE
         ]
-        read_only_fields = ['id', 'created_at', 'is_active']
+        read_only_fields = ['id', 'role', 'created_at', 'is_active']
     
     def get_full_name(self, obj):
         """Returns user's full name - explicit verb naming"""
@@ -28,6 +33,13 @@ class UserSerializer(serializers.ModelSerializer):
     def get_agency_id(self, obj):
         """Returns agency ID if user has an agency"""
         return obj.agency.id if obj.agency else None
+    
+    def get_picture_url(self, obj):
+        """Returns the full URL of the profile picture"""
+        if obj.picture and hasattr(obj.picture, 'url'):
+            return obj.picture.url
+        return None
+
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """Handles user registration with validation"""
@@ -62,6 +74,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
+
 
 class ChangePasswordSerializer(serializers.Serializer):
     """Serializer for password change functionality"""

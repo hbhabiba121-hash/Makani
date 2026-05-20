@@ -1,9 +1,11 @@
+// frontend/app/components/Navbar.tsx
 "use client";
 
 import { useEffect, useState, useRef } from "react";
 import { Bell, ChevronDown, LogOut, Settings, User, Globe, Check } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { getCurrentUser } from "@/lib/axios";
+import Image from "next/image";
 
 interface UserType {
   id: number;
@@ -12,6 +14,8 @@ interface UserType {
   last_name: string;
   full_name: string;
   role: string;
+  picture?: string | null;
+  picture_url?: string | null;
 }
 
 // ── i18n ──────────────────────────────────────────────────────
@@ -35,6 +39,9 @@ const i18n = {
       "/owner/reports":          { title: "Rapports",        sub: "Consultez vos rapports financiers." },
       "/owner/settings":         { title: "Paramètres",      sub: "Configurez votre espace." },
       "/owner/profile":          { title: "Mon profil",      sub: "Gérez vos informations personnelles." },
+      "/staff":                  { title: "Tableau de bord", sub: "Gérez vos tâches quotidiennes." },
+      "/staff/properties":       { title: "Propriétés",      sub: "Gérez les propriétés assignées." },
+      "/staff/tenants":          { title: "Locataires",      sub: "Suivez vos locataires." },
     } as Record<string, { title: string; sub: string }>,
     profile:  "Mon profil",
     settings: "Paramètres",
@@ -63,6 +70,9 @@ const i18n = {
       "/owner/reports":          { title: "التقارير",      sub: "استعرض تقاريرك المالية." },
       "/owner/settings":         { title: "الإعدادات",     sub: "اضبط إعدادات مساحة عملك." },
       "/owner/profile":          { title: "ملفي الشخصي",   sub: "إدارة معلوماتك الشخصية." },
+      "/staff":                  { title: "لوحة التحكم",   sub: "إدارة مهامك اليومية." },
+      "/staff/properties":       { title: "العقارات",      sub: "إدارة العقارات المخصصة لك." },
+      "/staff/tenants":          { title: "المستأجرين",    sub: "متابعة المستأجرين." },
     } as Record<string, { title: string; sub: string }>,
     profile:  "ملفي الشخصي",
     settings: "الإعدادات",
@@ -86,17 +96,21 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
   const [loading, setLoading]   = useState(true);
   const [dropOpen, setDropOpen] = useState(false);
   const [langDropOpen, setLangDropOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const dropRef  = useRef<HTMLDivElement>(null);
   const langDropRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const tx       = i18n[lang];
   const isRTL    = lang === "ar";
 
-  // Get dynamic page title based on current path
   const page = tx.pages[pathname] ?? { title: "Dashboard", sub: "" };
 
   useEffect(() => {
-    getCurrentUser().then((u) => { setUser(u); setLoading(false); });
+    getCurrentUser().then((u) => { 
+      setUser(u); 
+      setLoading(false);
+      setImageError(false);
+    });
   }, []);
 
   useEffect(() => {
@@ -104,7 +118,6 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
     document.documentElement.setAttribute("lang", lang);
   }, [lang, isRTL]);
 
-  // Close dropdowns when clicking outside
   useEffect(() => {
     const fn = (e: MouseEvent) => {
       if (dropRef.current && !dropRef.current.contains(e.target as Node))
@@ -121,6 +134,23 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
     if (user.first_name && user.last_name)
       return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase();
     return user.email[0].toUpperCase();
+  };
+
+  const getProfilePictureUrl = () => {
+    if (!user?.picture_url) return null;
+    if (user.picture_url.startsWith('http')) return user.picture_url;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    return `${baseUrl}${user.picture_url}`;
+  };
+
+  const profilePictureUrl = getProfilePictureUrl();
+  const showPicture = profilePictureUrl && !imageError;
+
+  // Get the base path for profile (works for /dashboard, /owner, /staff)
+  const getProfilePath = () => {
+    const segments = pathname.split('/');
+    const baseRole = segments[1]; // dashboard, owner, or staff
+    return `/${baseRole}/profile`;
   };
 
   return (
@@ -153,7 +183,6 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           gap: 1rem;
         }
 
-        /* Page title */
         .nb-title { flex: 1; }
         .nb-title-h {
           font-size: 19px; font-weight: 700;
@@ -166,16 +195,12 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           color: var(--ink-3); margin-top: 1px;
         }
 
-        /* Right cluster */
         .nb-right {
           display: flex; align-items: center; gap: 12px;
           margin-${isRTL ? "right" : "left"}: auto;
         }
 
-        /* Language selector - Globe icon style */
-        .nb-lang-container {
-          position: relative;
-        }
+        .nb-lang-container { position: relative; }
         
         .nb-lang-trigger {
           display: flex; align-items: center; gap: 6px;
@@ -196,7 +221,6 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           border-color: var(--green);
         }
         
-        /* Language dropdown */
         .nb-lang-dropdown {
           position: absolute;
           top: calc(100% + 8px);
@@ -231,26 +255,15 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           ${isRTL ? "flex-direction: row-reverse; text-align: right" : ""};
         }
         
-        .nb-lang-option:hover {
-          background: var(--bg);
-        }
-        
-        .nb-lang-option.active {
-          background: var(--green-dim);
-          color: var(--green);
-        }
-        
+        .nb-lang-option:hover { background: var(--bg); }
+        .nb-lang-option.active { background: var(--green-dim); color: var(--green); }
         .nb-lang-option .check-icon {
           margin-${isRTL ? "right" : "left"}: auto;
           opacity: 0;
           transition: opacity 0.12s;
         }
-        
-        .nb-lang-option.active .check-icon {
-          opacity: 1;
-        }
+        .nb-lang-option.active .check-icon { opacity: 1; }
 
-        /* Bell */
         .nb-bell {
           width: 36px; height: 36px;
           border-radius: 50%;
@@ -280,10 +293,7 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           100% { transform: scale(1); opacity: 1; }
         }
 
-        /* Profile section - Avatar only */
-        .nb-profile {
-          position: relative;
-        }
+        .nb-profile { position: relative; }
         
         .nb-profile-trigger {
           display: flex; align-items: center;
@@ -294,7 +304,6 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           transition: all 0.2s ease;
         }
 
-        /* Avatar */
         .nb-avatar-wrap {
           width: 36px; height: 36px;
           border-radius: 50%;
@@ -308,6 +317,12 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           border-color: var(--green);
         }
         
+        .nb-avatar-picture {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+        
         .nb-avatar-inner {
           width: 100%; height: 100%;
           background: linear-gradient(135deg, var(--green) 0%, #16a34a 100%);
@@ -315,7 +330,6 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
           font-size: 14px; font-weight: 600; color: white;
         }
         
-        /* Dropdown */
         .nb-drop {
           position: absolute;
           top: calc(100% + 8px);
@@ -379,7 +393,6 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
 
         .nb-drop-line { height: 1px; background: var(--border); margin: 8px 0; }
 
-        /* Skeleton */
         .nb-skel {
           width: 36px; height: 36px;
           background: linear-gradient(90deg,#f0f0ee 25%,#e6e6e2 50%,#f0f0ee 75%);
@@ -391,22 +404,17 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
       `}</style>
 
       <header className="nb">
-
-        {/* Dynamic Page Title - changes based on current route */}
         <div className="nb-title">
           <div className="nb-title-h">{page.title}</div>
           {page.sub && <div className="nb-title-sub">{page.sub}</div>}
         </div>
 
-        {/* Right */}
         <div className="nb-right">
-
-          {/* Language selector with icon and dropdown */}
           <div className="nb-lang-container" ref={langDropRef}>
             <button className="nb-lang-trigger" onClick={() => setLangDropOpen(v => !v)}>
               <Globe size={14} strokeWidth={1.8} />
               <span>{lang === "fr" ? "FR" : "AR"}</span>
-              <ChevronDown size={12} className={`nb-chevron ${langDropOpen ? 'rotated' : ''}`} />
+              <ChevronDown size={12} />
             </button>
             
             <div className={`nb-lang-dropdown${langDropOpen ? " open" : ""}`}>
@@ -429,20 +437,27 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
             </div>
           </div>
 
-          {/* Bell */}
           <button className="nb-bell" aria-label="Notifications">
             <Bell size={15} strokeWidth={1.8} />
             <span className="nb-bell-dot" />
           </button>
 
-          {/* User Profile - Avatar only */}
           {loading ? (
             <div className="nb-skel" />
           ) : (
             <div className="nb-profile" ref={dropRef}>
               <button className="nb-profile-trigger" onClick={() => setDropOpen(v => !v)}>
                 <div className="nb-avatar-wrap">
-                  <div className="nb-avatar-inner">{initials()}</div>
+                  {showPicture ? (
+                    <img 
+                      src={profilePictureUrl!}
+                      alt={user?.full_name || 'Profile'}
+                      className="nb-avatar-picture"
+                      onError={() => setImageError(true)}
+                    />
+                  ) : (
+                    <div className="nb-avatar-inner">{initials()}</div>
+                  )}
                 </div>
               </button>
 
@@ -454,7 +469,7 @@ export default function Navbar({ lang = "fr", onLangChange }: NavbarProps) {
                     {tx.roles[user?.role ?? ""] ?? user?.role}
                   </span>
                 </div>
-                <a href={`/${pathname.split('/')[1]}/profile`} className="nb-drop-item">
+                <a href={getProfilePath()} className="nb-drop-item">
                   <User size={14} strokeWidth={1.8} />
                   <span>{tx.profile}</span>
                 </a>
