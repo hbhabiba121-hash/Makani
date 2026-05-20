@@ -8,7 +8,7 @@ import {
   Wallet, Award, AlertCircle, XCircle, BarChart3
 } from "lucide-react";
 import api from "@/lib/axios";
-
+import { useLang } from "../contexts/LanguageContext";
 
 const labels = {
   fr: {
@@ -71,8 +71,11 @@ const labels = {
   },
 } as const;
 
-type Lang = "fr" | "ar";
-
+const toNum = (v: any): number => {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return isFinite(n) ? n : 0;
+};
 
 interface PropertyImage {
   id: number;
@@ -129,25 +132,27 @@ interface PerformanceMetrics {
 }
 
 export default function OwnerPropertiesPage() {
-
   const router = useRouter();
+  const { lang } = useLang();                        
+  const tx    = labels[lang];
+  const isRTL = lang === "ar";
+
   const [properties, setProperties]           = useState<Property[]>([]);
   const [performanceData, setPerformanceData] = useState<{ [key: number]: PerformanceMetrics }>({});
   const [loading, setLoading]                 = useState(true);
   const [loadingMetrics, setLoadingMetrics]   = useState<{ [key: number]: boolean }>({});
-  const currentYear = new Date().getFullYear();
   const [imageErrors, setImageErrors]         = useState<{ [key: number]: boolean }>({});
 
-  const [lang, setLang] = useState<Lang>("fr");
-  const tx    = labels[lang];
-  const isRTL = lang === "ar";
+  const currentYear = new Date().getFullYear();
 
   useEffect(() => {
     const token = localStorage.getItem("access");
     if (!token) router.push("/login");
   }, [router]);
 
-  useEffect(() => { fetchProperties(); }, []);
+  useEffect(() => {
+    fetchProperties();
+  }, []);
 
   const fetchProperties = async () => {
     try {
@@ -167,30 +172,35 @@ export default function OwnerPropertiesPage() {
     try {
       const finRes  = await api.get(`/api/financials/monthly-summary/${propertyId}/?year=${currentYear}`);
       const bookings: Booking[] = finRes.data || [];
+
       let occupancyRate = 0;
       try {
         const occRes = await api.get(`/api/financials/property-occupancy/${propertyId}/?year=${currentYear}`);
-        occupancyRate = occRes.data?.occupancy_rate || 0;
+        occupancyRate = toNum(occRes.data?.occupancy_rate);
       } catch {
-        const totalNights = bookings.reduce((sum, b) => sum + (b.nights || 0), 0);
+        const totalNights = bookings.reduce((sum, b) => sum + toNum(b.nights), 0);
         occupancyRate = (totalNights / 365) * 100;
       }
-      const totalBookings      = bookings.length;
-      const totalNights        = bookings.reduce((sum, b) => sum + (b.nights || 0), 0);
-      const totalRevenue       = bookings.reduce((sum, b) => sum + (b.revenue || 0), 0);
-      const totalPayout        = bookings.reduce((sum, b) => sum + (b.net_profit || 0), 0);
-      const avgPricePerNight   = totalNights > 0 ? totalRevenue / totalNights : 0;
-      const netProfit          = totalPayout;
-      const profitMargin       = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
-      let lastBookingDate      = null;
+
+      const totalBookings    = bookings.length;
+      const totalNights      = bookings.reduce((sum, b) => sum + toNum(b.nights), 0);
+      const totalRevenue     = bookings.reduce((sum, b) => sum + toNum(b.revenue), 0);
+      const totalPayout      = bookings.reduce((sum, b) => sum + toNum(b.net_profit), 0);
+
+      const avgPricePerNight = totalNights > 0 ? totalRevenue / totalNights : 0;
+
+      const netProfit    = totalPayout;
+      const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+      let lastBookingDate: string | null = null;
       if (bookings.length > 0) {
-        const lastBooking = bookings.sort((a, b) => {
+        const lastBooking = [...bookings].sort((a, b) => {
           if (a.year !== b.year) return b.year - a.year;
           return b.month - a.month;
         })[0];
         lastBookingDate = `${lastBooking.month_display || `Month ${lastBooking.month}`} ${lastBooking.year}`;
       }
-    
+
       const getRatingKey = (rate: number): "excellent" | "good" | "average" | "needsImprov" => {
         if (rate >= 70) return "excellent";
         if (rate >= 50) return "good";
@@ -210,6 +220,7 @@ export default function OwnerPropertiesPage() {
         needsImprov: XCircle,
       };
       const rk = getRatingKey(occupancyRate);
+
       setPerformanceData(prev => ({
         ...prev,
         [propertyId]: {
@@ -217,11 +228,11 @@ export default function OwnerPropertiesPage() {
           avgPricePerNight, occupancyRate, netProfit, profitMargin,
           lastBookingDate,
           rating: {
-            text:  rk, 
+            text:  rk,
             color: ratingColorMap[rk],
             icon:  ratingIconMap[rk],
-          }
-        }
+          },
+        },
       }));
     } catch (err) {
       console.error(`Error fetching metrics for property ${propertyId}:`, err);
@@ -254,7 +265,6 @@ export default function OwnerPropertiesPage() {
       return property.property_type.charAt(0).toUpperCase() + property.property_type.slice(1);
     return 'Property';
   };
- 
 
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
@@ -383,7 +393,6 @@ export default function OwnerPropertiesPage() {
     }
     .op-perf-val { font-size: 13px; font-weight: 600; color: var(--ink); }
     .op-perf-val.green { color: var(--green-text); }
-
     .op-perf-divider { border-top: 1px solid var(--border-2); padding-top: 6px; margin-top: 6px; }
 
     .op-skel { height: 12px; border-radius: 6px; background: var(--border-2); }
@@ -440,7 +449,6 @@ export default function OwnerPropertiesPage() {
           </button>
         </div>
 
-        {/* Loading skeletons */}
         {loading ? (
           <div className="op-grid">
             {[...Array(3)].map((_, i) => (
@@ -454,7 +462,6 @@ export default function OwnerPropertiesPage() {
               </div>
             ))}
           </div>
-
         ) : properties.length === 0 ? (
           <div className="op-empty">
             <Home size={56} color="var(--border-2)" style={{ margin: "0 auto" }} />
@@ -465,7 +472,6 @@ export default function OwnerPropertiesPage() {
               {tx.addProp}
             </button>
           </div>
-
         ) : (
           <div className="op-grid">
             {properties.map((p) => {
@@ -482,14 +488,12 @@ export default function OwnerPropertiesPage() {
                   : "#ef4444"
                 : "var(--ink)";
 
-              
               const ratingText = metrics
                 ? tx.ratings[metrics.rating.text as keyof typeof tx.ratings]
                 : "";
 
               return (
                 <div key={p.id} className="op-card">
-
                   {/* Image */}
                   <div className="op-img-wrap">
                     {!showPlaceholder ? (
@@ -510,7 +514,6 @@ export default function OwnerPropertiesPage() {
                     )}
                   </div>
 
-                  {/* Body */}
                   <div className="op-body">
                     <div className="op-name">{p.name}</div>
                     <div className="op-location">
@@ -529,7 +532,6 @@ export default function OwnerPropertiesPage() {
                       {p.area_sqm && <span className="op-spec"><Home size={13} /> {p.area_sqm} m²</span>}
                     </div>
 
-                    {/* Performance */}
                     <div className="op-perf">
                       <div className="op-perf-title">
                         <BarChart3 size={13} color="var(--green-text)" />
@@ -546,19 +548,22 @@ export default function OwnerPropertiesPage() {
                           <div className="op-perf-row">
                             <span className="op-perf-label"><Percent size={12} />{tx.occupancy}</span>
                             <span className="op-perf-val" style={{ color: occColor }}>
-                              {metrics.occupancyRate.toFixed(0)}%
+                              {toNum(metrics.occupancyRate).toFixed(0)}%
                             </span>
                           </div>
                           <div className="op-perf-row">
                             <span className="op-perf-label"><DollarSign size={12} />{tx.avgNight}</span>
                             <span className="op-perf-val">
-                              {Math.round(metrics.avgPricePerNight).toLocaleString()} MAD
+                              {/* ── NaN-safe display ── */}
+                              {metrics.totalNights > 0
+                                ? Math.round(metrics.avgPricePerNight).toLocaleString()
+                                : "—"} MAD
                             </span>
                           </div>
                           <div className="op-perf-row">
                             <span className="op-perf-label"><Wallet size={12} />{tx.netProfit}</span>
                             <span className="op-perf-val green">
-                              {Math.round(metrics.netProfit).toLocaleString()} MAD
+                              {Math.round(toNum(metrics.netProfit)).toLocaleString()} MAD
                             </span>
                           </div>
                           <div className="op-perf-row">
@@ -583,7 +588,6 @@ export default function OwnerPropertiesPage() {
                       )}
                     </div>
 
-                    {/* Actions */}
                     <div className="op-actions">
                       <button className="op-btn-details"
                         onClick={() => router.push(`/owner/properties/${p.id}`)}>
@@ -600,7 +604,6 @@ export default function OwnerPropertiesPage() {
             })}
           </div>
         )}
-
       </div>
     </>
   );

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import api from "@/lib/axios";
+import { useLang } from "../../contexts/LanguageContext";
 
 type Lang = "fr" | "ar";
 
@@ -121,6 +122,11 @@ const t: Record<Lang, Record<string, string>> = {
   },
 };
 
+const toNum = (v: any): number => {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return isFinite(n) ? n : 0;
+};
 
 interface Property {
   id: number;
@@ -178,9 +184,13 @@ interface OccupancyData {
 
 export default function OwnerPropertyDetailPage() {
 
-  const router = useRouter();
-  const params = useParams();
+  const router     = useRouter();
+  const params     = useParams();
   const propertyId = params.id;
+
+  const { lang } = useLang();
+  const tr = (key: string) => t[lang][key] ?? key;
+  const isAr = lang === "ar";
 
   const [property, setProperty]           = useState<Property | null>(null);
   const [bookings, setBookings]           = useState<Booking[]>([]);
@@ -190,23 +200,8 @@ export default function OwnerPropertyDetailPage() {
   const [selectedYear, setSelectedYear]   = useState(new Date().getFullYear());
   const [showExpenseReceipt, setShowExpenseReceipt] = useState<number | null>(null);
   const [expandedSections, setExpandedSections] = useState({
-    bookings: true, expenses: true, financials: true
+    bookings: true, expenses: true, financials: true,
   });
-
-  const [lang, setLang] = useState<Lang>("fr");
-  const tr = (key: string) => t[lang][key] ?? key;
-  const isAr = lang === "ar";
-
-  useEffect(() => {
-    const stored = localStorage.getItem("lang") as Lang | null;
-    if (stored === "fr" || stored === "ar") setLang(stored);
-    const handler = () => {
-      const v = localStorage.getItem("lang") as Lang | null;
-      if (v === "fr" || v === "ar") setLang(v);
-    };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -243,13 +238,13 @@ export default function OwnerPropertyDetailPage() {
     }
   };
 
-  const totalRevenue    = bookings.reduce((sum, b) => sum + Number(b.revenue || 0), 0);
-  const totalCommission = bookings.reduce((sum, b) => sum + Number(b.commission || 0), 0);
-  const totalExpenses   = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const totalRevenue    = bookings.reduce((sum, b) => sum + toNum(b.revenue), 0);
+  const totalCommission = bookings.reduce((sum, b) => sum + toNum(b.commission), 0);
+  const totalExpenses   = expenses.reduce((sum, e) => sum + toNum(e.amount), 0);
   const netProfit       = totalRevenue - totalCommission - totalExpenses;
-  const occupancyRate   = occupancyData?.occupancy_rate || 0;
+  const occupancyRate   = toNum(occupancyData?.occupancy_rate);
   const totalBookings   = bookings.length;
-  const totalNights     = bookings.reduce((sum, b) => sum + (b.nights || 0), 0);
+  const totalNights     = bookings.reduce((sum, b) => sum + toNum(b.nights), 0);
   const avgStayDuration = totalBookings > 0 ? totalNights / totalBookings : 0;
 
   const monthlyChartData = (() => {
@@ -258,16 +253,16 @@ export default function OwnerPropertyDetailPage() {
     bookings.forEach(booking => {
       const idx = (booking.month || 1) - 1;
       if (idx >= 0 && idx < 12) {
-        data[idx].revenue    += Number(booking.revenue || 0);
-        data[idx].commission += Number(booking.commission || 0);
-        data[idx].netProfit  += Number(booking.net_profit || 0);
+        data[idx].revenue    += toNum(booking.revenue);
+        data[idx].commission += toNum(booking.commission);
+        data[idx].netProfit  += toNum(booking.net_profit);
       }
     });
     return data;
   })();
 
   const expensesByCategory = expenses.reduce((acc, e) => {
-    acc[e.category] = (acc[e.category] || 0) + Number(e.amount);
+    acc[e.category] = (acc[e.category] || 0) + toNum(e.amount);
     return acc;
   }, {} as Record<string, number>);
 
@@ -277,9 +272,9 @@ export default function OwnerPropertyDetailPage() {
   const toggleSection = (section: keyof typeof expandedSections) =>
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
 
-
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
 
     .pd {
       --green:      #22c55e;
@@ -294,7 +289,7 @@ export default function OwnerPropertyDetailPage() {
       --border-2:   #e5e7eb;
       --bg:         #f9fafb;
       --surface:    #ffffff;
-      --f:          'Geist', system-ui, sans-serif;
+      --f: ${isAr ? "'Cairo'" : "'Geist'"}, system-ui, sans-serif;
 
       font-family: var(--f);
       background:  var(--bg);
@@ -339,7 +334,6 @@ export default function OwnerPropertyDetailPage() {
     .pd-refresh:hover { color: var(--green-text); border-color: var(--green); }
 
     .pd-body { padding: 2rem; }
-
     .pd-section-label {
       font-size: 11px; font-weight: 600; letter-spacing: 0.07em;
       color: var(--ink-4); text-transform: uppercase; margin-bottom: 1rem;
@@ -362,10 +356,7 @@ export default function OwnerPropertyDetailPage() {
       display: flex; align-items: center; gap: 6px;
       font-size: 11px; color: var(--ink-4); margin-bottom: 8px;
     }
-    .pd-kpi-val {
-      font-size: 20px; font-weight: 700; color: var(--ink);
-      letter-spacing: -0.02em;
-    }
+    .pd-kpi-val { font-size: 20px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
     .pd-kpi-val.green  { color: var(--green-text); }
     .pd-kpi-val.red    { color: #ef4444; }
     .pd-kpi-val.orange { color: #f97316; }
@@ -377,7 +368,6 @@ export default function OwnerPropertyDetailPage() {
       border-radius: 16px; overflow: hidden;
       margin-bottom: 1.5rem;
     }
-
     .pd-chart-card {
       background: var(--surface);
       border: 1px solid var(--border-2);
@@ -387,19 +377,15 @@ export default function OwnerPropertyDetailPage() {
     .pd-chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
     .pd-chart-title  { font-size: 16px; font-weight: 700; color: var(--ink); }
     .pd-chart-sub    { font-size: 12px; color: var(--ink-4); margin-top: 3px; }
-    .pd-trend {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 13px; font-weight: 500;
-    }
+    .pd-trend { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; }
 
     .pd-toggle {
       width: 100%; display: flex; justify-content: space-between; align-items: center;
       padding: 1.25rem 1.5rem; background: none; border: none;
-      cursor: pointer; font-family: var(--f);
-      transition: background 0.12s;
+      cursor: pointer; font-family: var(--f); transition: background 0.12s;
     }
     .pd-toggle:hover { background: var(--bg); }
-    .pd-toggle-title { font-size: 16px; font-weight: 700; color: var(--ink); text-align: left; }
+    .pd-toggle-title { font-size: 16px; font-weight: 700; color: var(--ink); text-align: ${isAr ? "right" : "left"}; }
     .pd-toggle-sub   { font-size: 12px; color: var(--ink-4); margin-top: 3px; }
     .pd-toggle-right { display: flex; align-items: center; gap: 14px; }
     .pd-toggle-stat  { font-size: 13px; font-weight: 600; color: var(--ink); text-align: right; }
@@ -409,18 +395,18 @@ export default function OwnerPropertyDetailPage() {
     table { width: 100%; border-collapse: collapse; }
     thead tr { background: var(--bg); }
     thead th {
-      padding: 10px 20px; text-align: left;
+      padding: 10px 20px; text-align: ${isAr ? "right" : "left"};
       font-size: 11px; font-weight: 600; text-transform: uppercase;
       letter-spacing: 0.06em; color: var(--green-text);
     }
     tbody tr { border-top: 1px solid var(--border); transition: background 0.1s; }
     tbody tr:hover { background: var(--bg); }
     tbody td { padding: 12px 20px; font-size: 13px; color: var(--ink-2); }
-    .td-bold   { font-weight: 600; color: var(--ink); }
-    .td-muted  { color: var(--ink-4); }
-    .td-red    { color: #ef4444; }
-    .td-green  { color: var(--green-text); font-weight: 600; }
-    .td-badge  {
+    .td-bold  { font-weight: 600; color: var(--ink); }
+    .td-muted { color: var(--ink-4); }
+    .td-red   { color: #ef4444; }
+    .td-green { color: var(--green-text); font-weight: 600; }
+    .td-badge {
       display: inline-block; font-size: 11px; font-weight: 500;
       padding: 2px 8px; border-radius: 999px;
       background: var(--bg); color: var(--ink-3);
@@ -454,15 +440,6 @@ export default function OwnerPropertyDetailPage() {
     .pd-spinner { width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--green-bg); border-top: 3px solid var(--green); animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .pd-loading-text { font-size: 13px; color: var(--ink-4); }
-
-    /* RTL support */
-    .pd[dir="rtl"] .pd-back { flex-direction: row-reverse; }
-    .pd[dir="rtl"] thead th { text-align: right; }
-    .pd[dir="rtl"] .pd-toggle-title { text-align: right; }
-    .pd[dir="rtl"] .pd-fin-label { flex-direction: row-reverse; }
-    .pd[dir="rtl"] .pd-toggle { flex-direction: row-reverse; }
-    .pd[dir="rtl"] .pd-topbar-row { flex-direction: row-reverse; }
-    .pd[dir="rtl"] .pd-kpi-label { flex-direction: row-reverse; }
   `;
 
   if (loading) return (
@@ -493,7 +470,6 @@ export default function OwnerPropertyDetailPage() {
       <style>{css}</style>
       <div className="pd" dir={isAr ? "rtl" : "ltr"}>
 
-        {/* ── Sticky top bar ── */}
         <div className="pd-topbar">
           <button className="pd-back" onClick={() => router.back()}>
             <ArrowLeft size={15} strokeWidth={1.8} style={{ transform: isAr ? "scaleX(-1)" : undefined }} />
@@ -525,7 +501,6 @@ export default function OwnerPropertyDetailPage() {
 
         <div className="pd-body">
 
-          {/* ── KPIs ── */}
           <div className="pd-section-label">{tr("quick_snapshot")}</div>
           <div className="pd-kpi-grid">
             <div className="pd-kpi">
@@ -554,7 +529,6 @@ export default function OwnerPropertyDetailPage() {
             </div>
           </div>
 
-          {/* ── Chart ── */}
           <div className="pd-chart-card">
             <div className="pd-chart-header">
               <div>
@@ -593,13 +567,9 @@ export default function OwnerPropertyDetailPage() {
             </ResponsiveContainer>
           </div>
 
-          {/* ── Two columns ── */}
           <div className="pd-cols">
 
-            {/* Left */}
             <div>
-
-              {/* Bookings */}
               <div className="pd-card">
                 <button className="pd-toggle" onClick={() => toggleSection('bookings')}>
                   <div>
@@ -611,12 +581,9 @@ export default function OwnerPropertyDetailPage() {
                       <div className="pd-toggle-stat">{totalBookings} {tr("stays")}</div>
                       <div className="pd-toggle-stat-sub">{tr("avg_nights")} {avgStayDuration.toFixed(1)} {tr("nights_label")}</div>
                     </div>
-                    {expandedSections.bookings
-                      ? <ChevronUp size={18} color="var(--ink-4)" />
-                      : <ChevronDown size={18} color="var(--ink-4)" />}
+                    {expandedSections.bookings ? <ChevronUp size={18} color="var(--ink-4)" /> : <ChevronDown size={18} color="var(--ink-4)" />}
                   </div>
                 </button>
-
                 {expandedSections.bookings && (
                   <div className="pd-table-wrap">
                     <table>
@@ -634,10 +601,10 @@ export default function OwnerPropertyDetailPage() {
                             <td className="td-muted">
                               {b.check_in ? `${b.check_in} → ${b.check_out}` : `${b.month_display} ${b.year}`}
                             </td>
-                            <td className="td-muted">{b.nights}</td>
-                            <td className="td-muted">{b.price_per_night} MAD</td>
-                            <td style={{ fontWeight: 600 }}>{b.revenue.toLocaleString()} MAD</td>
-                            <td className="td-red">{b.commission.toLocaleString()} MAD</td>
+                            <td className="td-muted">{toNum(b.nights)}</td>
+                            <td className="td-muted">{toNum(b.price_per_night).toLocaleString()} MAD</td>
+                            <td style={{ fontWeight: 600 }}>{toNum(b.revenue).toLocaleString()} MAD</td>
+                            <td className="td-red">{toNum(b.commission).toLocaleString()} MAD</td>
                           </tr>
                         ))}
                         {bookings.length === 0 && (
@@ -653,7 +620,6 @@ export default function OwnerPropertyDetailPage() {
                 )}
               </div>
 
-              {/* Expenses */}
               <div className="pd-card">
                 <button className="pd-toggle" onClick={() => toggleSection('expenses')}>
                   <div>
@@ -669,12 +635,9 @@ export default function OwnerPropertyDetailPage() {
                         {tr("top_label")} {Object.entries(expensesByCategory).sort((a,b)=>b[1]-a[1])[0]?.[0] || tr("none_label")}
                       </div>
                     </div>
-                    {expandedSections.expenses
-                      ? <ChevronUp size={18} color="var(--ink-4)" />
-                      : <ChevronDown size={18} color="var(--ink-4)" />}
+                    {expandedSections.expenses ? <ChevronUp size={18} color="var(--ink-4)" /> : <ChevronDown size={18} color="var(--ink-4)" />}
                   </div>
                 </button>
-
                 {expandedSections.expenses && (
                   expenses.length > 0 ? (
                     <div className="pd-exp-grid">
@@ -684,7 +647,7 @@ export default function OwnerPropertyDetailPage() {
                           <PieChart>
                             <Pie data={expenseCategories} cx="50%" cy="50%"
                               innerRadius={35} outerRadius={60} dataKey="value"
-                              label={({ name, percent }) => `${(percent*100).toFixed(0)}%`}>
+                              label={({ percent }) => `${(percent*100).toFixed(0)}%`}>
                               {expenseCategories.map((_, i) => (
                                 <Cell key={i} fill={COLORS[i % COLORS.length]} />
                               ))}
@@ -707,7 +670,7 @@ export default function OwnerPropertyDetailPage() {
                                 <td>{e.category}</td>
                                 <td className="td-muted">{e.description || '–'}</td>
                                 <td className="td-muted">{e.date}</td>
-                                <td className="td-red">{Number(e.amount).toLocaleString()} MAD</td>
+                                <td className="td-red">{toNum(e.amount).toLocaleString()} MAD</td>
                                 <td>
                                   {e.has_receipt ? (
                                     <button style={{ fontSize: 12, color: "var(--green-text)", background: "none", border: "none", cursor: "pointer" }}
@@ -733,21 +696,15 @@ export default function OwnerPropertyDetailPage() {
               </div>
             </div>
 
-            {/* Right */}
             <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-
-              {/* Financial Breakdown */}
               <div className="pd-card" style={{ position: "sticky", top: 80 }}>
                 <button className="pd-toggle" onClick={() => toggleSection('financials')}>
                   <div>
                     <div className="pd-toggle-title">{tr("fin_title")}</div>
                     <div className="pd-toggle-sub">{tr("fin_sub")}</div>
                   </div>
-                  {expandedSections.financials
-                    ? <ChevronUp size={18} color="var(--ink-4)" />
-                    : <ChevronDown size={18} color="var(--ink-4)" />}
+                  {expandedSections.financials ? <ChevronUp size={18} color="var(--ink-4)" /> : <ChevronDown size={18} color="var(--ink-4)" />}
                 </button>
-
                 {expandedSections.financials && (
                   <div className="pd-fin-body">
                     <div className="pd-fin-row">
@@ -778,7 +735,6 @@ export default function OwnerPropertyDetailPage() {
                       </div>
                       <div className="pd-fin-total-val">{netProfit.toLocaleString()} MAD</div>
                     </div>
-
                     <div className="pd-margin-bar" style={{ marginTop: 20 }}>
                       <div className="pd-margin-fill" style={{ width: `${Math.max(0, Math.min(100, profitMarginPct))}%` }} />
                     </div>
@@ -790,14 +746,12 @@ export default function OwnerPropertyDetailPage() {
                 )}
               </div>
 
-              {/* About */}
               {property.description && (
                 <div className="pd-about">
                   <div className="pd-about-title">{tr("about_title")}</div>
                   <div className="pd-about-text">{property.description}</div>
                 </div>
               )}
-
             </div>
           </div>
         </div>

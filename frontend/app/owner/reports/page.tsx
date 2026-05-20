@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, FileText, Calendar, Filter, ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { Download, FileText, Calendar, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import api from "@/lib/axios";
-
+import { useLang } from "../contexts/LanguageContext";
 
 const i18n = {
   fr: {
@@ -57,9 +57,6 @@ const i18n = {
   },
 } as const;
 
-type Lang = "fr" | "ar";
-
-
 interface Report {
   id: number;
   name: string;
@@ -81,29 +78,17 @@ interface Report {
 export default function OwnerReportsPage() {
 
   const router = useRouter();
+
+  const { lang } = useLang();
+  const tx    = i18n[lang];
+  const isRTL = lang === "ar";
+
   const [reports, setReports]               = useState<Report[]>([]);
   const [loading, setLoading]               = useState(true);
   const [downloading, setDownloading]       = useState<number | null>(null);
   const [filterType, setFilterType]         = useState<"all" | "monthly" | "yearly">("all");
   const [selectedYear, setSelectedYear]     = useState<number | "all">("all");
   const [expandedReport, setExpandedReport] = useState<number | null>(null);
-
- 
-  const [lang, setLang] = useState<Lang>("fr");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("lang") as Lang | null;
-    if (stored === "fr" || stored === "ar") setLang(stored);
-    const handler = () => {
-      const l = localStorage.getItem("lang") as Lang | null;
-      if (l === "fr" || l === "ar") setLang(l);
-    };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, []);
-
-  const tx    = i18n[lang];
-  const isRTL = lang === "ar";
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -150,10 +135,6 @@ export default function OwnerReportsPage() {
     }
   };
 
-  const formatDate = (dateString: string) => dateString;
-
-  const getReportDisplayName = (report: Report) => report.name;
-
   const filteredReports = reports.filter(report => {
     if (filterType !== "all" && report.report_type !== filterType) return false;
     if (selectedYear !== "all" && report.year !== selectedYear) return false;
@@ -162,13 +143,15 @@ export default function OwnerReportsPage() {
 
   const availableYears = [...new Set(reports.map(r => r.year))].sort((a, b) => b - a);
 
-
-  const dir = isRTL ? "rtl" : "ltr";
-
   return (
-    <div className="p-8 bg-[#f9fafb] min-h-screen" style={{ direction: dir }}>
+    <div
+      className="p-8 bg-[#f9fafb] min-h-screen"
+      style={{
+        direction: isRTL ? "rtl" : "ltr",
+        fontFamily: isRTL ? "'Cairo', system-ui, sans-serif" : "'Geist', system-ui, sans-serif",
+      }}
+    >
 
-      {/* Header */}
       <div className={`flex justify-between items-start mb-8 flex-wrap gap-4 ${isRTL ? "flex-row-reverse" : ""}`}>
         <div>
           <p className="text-sm text-gray-400 mb-1">{tx.breadcrumb}</p>
@@ -177,7 +160,6 @@ export default function OwnerReportsPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
         <div className={`flex flex-wrap gap-4 items-center ${isRTL ? "flex-row-reverse" : ""}`}>
           <div className={`flex items-center gap-2 ${isRTL ? "flex-row-reverse" : ""}`}>
@@ -186,30 +168,19 @@ export default function OwnerReportsPage() {
           </div>
 
           <div className="flex gap-2">
-            <button
-              onClick={() => setFilterType("all")}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
-                filterType === "all" ? "bg-[#22c55e] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {tx.all}
-            </button>
-            <button
-              onClick={() => setFilterType("monthly")}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
-                filterType === "monthly" ? "bg-[#22c55e] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {tx.monthly}
-            </button>
-            <button
-              onClick={() => setFilterType("yearly")}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
-                filterType === "yearly" ? "bg-[#22c55e] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
-            >
-              {tx.yearly}
-            </button>
+            {(["all", "monthly", "yearly"] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilterType(f)}
+                className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
+                  filterType === f
+                    ? "bg-[#22c55e] text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {f === "all" ? tx.all : f === "monthly" ? tx.monthly : tx.yearly}
+              </button>
+            ))}
           </div>
 
           <select
@@ -231,7 +202,6 @@ export default function OwnerReportsPage() {
         </div>
       </div>
 
-      {/* Reports List */}
       <div className="space-y-4">
         {loading ? (
           [...Array(3)].map((_, i) => (
@@ -256,9 +226,7 @@ export default function OwnerReportsPage() {
           </div>
         ) : (
           filteredReports.map((report) => {
-            const reportName = getReportDisplayName(report);
             const isExpanded = expandedReport === report.id;
-
             return (
               <div
                 key={report.id}
@@ -267,22 +235,23 @@ export default function OwnerReportsPage() {
                 <div className="p-5">
                   <div className={`flex justify-between items-start ${isRTL ? "flex-row-reverse" : ""}`}>
                     <div className={`flex items-start gap-4 ${isRTL ? "flex-row-reverse" : ""}`}>
-                      <div className="w-12 h-12 rounded-xl bg-[#f0fdf4] flex items-center justify-content-center flex-shrink-0" style={{display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <div className="w-12 h-12 rounded-xl bg-[#f0fdf4] flex-shrink-0"
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <FileText size={22} className="text-[#22c55e]" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-gray-900 text-lg">{reportName}</h3>
+                        <h3 className="font-bold text-gray-900 text-lg">{report.name}</h3>
                         <div className={`flex items-center gap-3 mt-1 flex-wrap ${isRTL ? "flex-row-reverse" : ""}`}>
                           <span className={`text-xs text-gray-400 flex items-center gap-1 ${isRTL ? "flex-row-reverse" : ""}`}>
                             <Calendar size={12} />
-                            {tx.generated} {formatDate(report.created_at)}
+                            {tx.generated} {report.created_at}
                           </span>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            report.report_type === 'monthly'
-                              ? 'bg-blue-50 text-blue-600'
-                              : 'bg-[#f0fdf4] text-[#22c55e]'
+                            report.report_type === "monthly"
+                              ? "bg-blue-50 text-blue-600"
+                              : "bg-[#f0fdf4] text-[#22c55e]"
                           }`}>
-                            {report.report_type === 'monthly' ? tx.monthlyReport : tx.yearlyReport}
+                            {report.report_type === "monthly" ? tx.monthlyReport : tx.yearlyReport}
                           </span>
                           <span className="text-xs text-gray-400">{report.property_name}</span>
                         </div>
@@ -297,15 +266,14 @@ export default function OwnerReportsPage() {
                         <p className="text-xs text-gray-400">{tx.netProfit}</p>
                       </div>
                       <button
-                        onClick={() => handleDownload(report.id, reportName)}
+                        onClick={() => handleDownload(report.id, report.name)}
                         disabled={downloading === report.id}
                         className={`flex items-center gap-2 bg-[#22c55e] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#16a34a] transition-all disabled:opacity-50 ${isRTL ? "flex-row-reverse" : ""}`}
                       >
-                        {downloading === report.id ? (
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                          <Download size={15} />
-                        )}
+                        {downloading === report.id
+                          ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          : <Download size={15} />
+                        }
                         {downloading === report.id ? "..." : tx.download}
                       </button>
                       <button
@@ -317,7 +285,6 @@ export default function OwnerReportsPage() {
                     </div>
                   </div>
 
-                  {/* Expanded Details */}
                   {isExpanded && (
                     <div className="mt-5 pt-4 border-t border-gray-100">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -347,7 +314,7 @@ export default function OwnerReportsPage() {
                         </div>
                       </div>
                       <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400">
-                        {tx.genByAgency} {formatDate(report.created_at)}
+                        {tx.genByAgency} {report.created_at}
                       </div>
                     </div>
                   )}
@@ -358,7 +325,6 @@ export default function OwnerReportsPage() {
         )}
       </div>
 
-      {/* Summary Stats */}
       {!loading && reports.length > 0 && (
         <div className="mt-6 bg-[#f0fdf4] border border-green-100 rounded-xl p-4 text-center">
           <p className="text-sm text-gray-500">

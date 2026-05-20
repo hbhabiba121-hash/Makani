@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Search, FileText, TrendingUp, TrendingDown, Wallet, DollarSign, Receipt, Calendar, ChevronDown, ChevronUp, Filter } from "lucide-react";
+import { Search, FileText, TrendingDown, Wallet, DollarSign, Receipt, Calendar, Filter } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from "recharts";
 import api from "@/lib/axios";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { useLang } from "../contexts/LanguageContext";
 
 const i18n = {
   fr: {
@@ -21,7 +24,7 @@ const i18n = {
     totalExpenses:    "Dépenses totales",
     opCosts:          "Coûts opérationnels",
     agencyComm:       "Commission agence",
-    pctRevenue:       "15% des revenus",
+    pctRevenue:       "% des revenus",
     netProfit:        "Votre bénéfice net",
     afterComm:        "Après commission & dépenses",
     monthlyTrend:     (y: number) => `📈 Tendance mensuelle des revenus (${y})`,
@@ -69,7 +72,7 @@ const i18n = {
     totalExpenses:    "إجمالي المصروفات",
     opCosts:          "التكاليف التشغيلية",
     agencyComm:       "عمولة الوكالة",
-    pctRevenue:       "15% من الإيرادات",
+    pctRevenue:       "% من الإيرادات",
     netProfit:        "صافي ربحك",
     afterComm:        "بعد العمولة والمصروفات",
     monthlyTrend:     (y: number) => `📈 الاتجاه الشهري للإيرادات (${y})`,
@@ -107,7 +110,6 @@ const i18n = {
 
 type Lang = "fr" | "ar";
 
-
 interface Financial {
   id: number;
   property: { id: number; name: string };
@@ -116,9 +118,9 @@ interface Financial {
   year: number;
   revenue: string;
   expenses: string;
-  commission?: string;
-  owner_payout?: string;
-  net_profit?: string;
+  commission?: string | number;
+  owner_payout?: string | number;
+  net_profit?: string | number;
 }
 
 interface Expense {
@@ -141,48 +143,41 @@ interface Property {
 export default function OwnerEarningsPage() {
 
   const router = useRouter();
-  const [financials, setFinancials] = useState<Financial[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [exporting, setExporting] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(0);
-  const [showFilters, setShowFilters] = useState(false);
-
-  const [lang, setLang] = useState<Lang>("fr");
-
-  useEffect(() => {
-    const stored = localStorage.getItem("lang") as Lang | null;
-    if (stored === "fr" || stored === "ar") setLang(stored);
-    const handler = () => {
-      const l = localStorage.getItem("lang") as Lang | null;
-      if (l === "fr" || l === "ar") setLang(l);
-    };
-    window.addEventListener("storage", handler);
-    return () => window.removeEventListener("storage", handler);
-  }, []);
-
+  const { lang } = useLang();
   const tx    = i18n[lang];
   const isRTL = lang === "ar";
 
+  const [financials, setFinancials]   = useState<Financial[]>([]);
+  const [properties, setProperties]   = useState<Property[]>([]);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [search, setSearch]           = useState("");
+  const [exporting, setExporting]     = useState(false);
+  const [selectedYear, setSelectedYear]   = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(0);
+  const [showFilters, setShowFilters]     = useState(false);
 
   const MONTHS = tx.months.map((label, value) => ({ value, label }));
+
+  const getExpensesForMonth = (month: number, year: number) =>
+    allExpenses
+      .filter(e => {
+        const d = new Date(e.date);
+        return d.getMonth() + 1 === month && d.getFullYear() === year;
+      })
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
   useEffect(() => {
     const token = localStorage.getItem("access");
     if (!token) router.push("/login");
   }, [router]);
 
-  useEffect(() => {
-    fetchData();
-  }, [selectedYear]);
+  useEffect(() => { fetchData(); }, [selectedYear]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const propsRes = await api.get("/api/properties/");
+      const propsRes  = await api.get("/api/properties/");
       const propsData = Array.isArray(propsRes.data) ? propsRes.data : propsRes.data.results ?? [];
       setProperties(propsData);
 
@@ -190,56 +185,39 @@ export default function OwnerEarningsPage() {
       for (const prop of propsData) {
         try {
           const finRes = await api.get(`/api/financials/monthly-summary/${prop.id}/?year=${selectedYear}`);
-          let finData = Array.isArray(finRes.data) ? finRes.data : [];
-
-          if (selectedMonth !== 0) {
+          let finData  = Array.isArray(finRes.data) ? finRes.data : [];
+          if (selectedMonth !== 0)
             finData = finData.filter((item: any) => item.month === selectedMonth);
-          }
-
-          const processedData = finData.map((item: any) => ({
+          const processed = finData.map((item: any) => ({
             ...item,
-            revenue: item.revenue || 0,
-            expenses: item.expenses || 0,
-            commission: item.commission || (Number(item.revenue) * 0.15),
+            revenue:      item.revenue    || 0,
+            expenses:     item.expenses   || 0,
+            commission:   item.commission || (Number(item.revenue) * 0.15),
             owner_payout: item.net_profit || (Number(item.revenue) * 0.85),
           }));
-
-          allFinancials.push(...processedData);
-        } catch (err) {
-          console.warn(`No financial data for property ${prop.id}:`, err);
-        }
+          allFinancials.push(...processed);
+        } catch { console.warn(`No financial data for property ${prop.id}`); }
       }
-
-      allFinancials.sort((a, b) => {
-        if (b.year !== a.year) return b.year - a.year;
-        return b.month - a.month;
-      });
+      allFinancials.sort((a, b) => b.year !== a.year ? b.year - a.year : b.month - a.month);
       setFinancials(allFinancials);
 
-      const allExpensesData: Expense[] = [];
+      const allExpData: Expense[] = [];
       for (const prop of propsData) {
         try {
           const expRes = await api.get(`/api/financials/expenses/?property_id=${prop.id}`);
-          let expData = expRes.data || [];
-
+          let expData  = expRes.data || [];
           if (selectedMonth !== 0) {
-            expData = expData.filter((exp: Expense) => {
-              const expDate = new Date(exp.date);
-              return expDate.getMonth() + 1 === selectedMonth && expDate.getFullYear() === selectedYear;
+            expData = expData.filter((e: Expense) => {
+              const d = new Date(e.date);
+              return d.getMonth() + 1 === selectedMonth && d.getFullYear() === selectedYear;
             });
           } else {
-            expData = expData.filter((exp: Expense) => {
-              const expDate = new Date(exp.date);
-              return expDate.getFullYear() === selectedYear;
-            });
+            expData = expData.filter((e: Expense) => new Date(e.date).getFullYear() === selectedYear);
           }
-
-          allExpensesData.push(...expData);
-        } catch (err) {
-          console.warn(`No expenses for property ${prop.id}:`, err);
-        }
+          allExpData.push(...expData);
+        } catch { console.warn(`No expenses for property ${prop.id}`); }
       }
-      setAllExpenses(allExpensesData);
+      setAllExpenses(allExpData);
 
     } catch (err) {
       console.error("Error fetching data:", err);
@@ -248,55 +226,78 @@ export default function OwnerEarningsPage() {
     }
   };
 
-  useEffect(() => {
-    if (!loading) {
-      fetchData();
-    }
-  }, [selectedMonth]);
+  useEffect(() => { if (!loading) fetchData(); }, [selectedMonth]);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = () => {
     setExporting(true);
     try {
-      const res = await api.get(`/reports/earnings/export/?year=${selectedYear}&month=${selectedMonth}`, {
-        responseType: 'blob',
+      const doc        = new jsPDF();
+      const monthLabel = selectedMonth === 0
+        ? tx.fullYear(selectedYear)
+        : `${MONTHS[selectedMonth]?.label} ${selectedYear}`;
+
+      doc.setFontSize(18); doc.setTextColor(22, 163, 74);
+      doc.text("Makani — " + tx.title, 14, 20);
+      doc.setFontSize(11); doc.setTextColor(100);
+      doc.text(monthLabel, 14, 28);
+      doc.setFontSize(12); doc.setTextColor(0);
+      doc.text(`${tx.totalRevenue}: ${totalRevenue.toLocaleString()} MAD`, 14, 40);
+      doc.text(`${tx.agencyComm}: -${totalCommission.toLocaleString()} MAD`, 14, 48);
+      doc.text(`${tx.totalExpenses}: -${totalExpenses.toLocaleString()} MAD`, 14, 56);
+      doc.setTextColor(22, 163, 74);
+      doc.text(`${tx.netProfit}: ${totalNetProfit.toLocaleString()} MAD`, 14, 64);
+      doc.setTextColor(0);
+
+      const tableData = financials.map(f => {
+        const rowExp = getExpensesForMonth(f.month, f.year); // ← expenses صحيحة
+        return [
+          `${f.month_display} ${f.year}`,
+          f.property.name,
+          `${Number(f.revenue).toLocaleString()} MAD`,
+          `${rowExp.toLocaleString()} MAD`,
+          `-${Number(f.commission).toLocaleString()} MAD`,
+          `${Number(f.owner_payout || f.net_profit || 0).toLocaleString()} MAD`,
+        ];
       });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Earnings_Report_${selectedYear}${selectedMonth ? `_${MONTHS[selectedMonth]?.label}` : ''}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+
+      autoTable(doc, {
+        startY: 72,
+        head: [[tx.date, tx.propName, tx.revenue, tx.expenses, tx.commission, tx.netToOwner]],
+        body: tableData,
+        theme: "grid",
+        headStyles: { fillColor: [22, 163, 74], fontSize: 9 },
+        bodyStyles: { fontSize: 9 },
+      });
+
+      doc.save(`Earnings_${selectedYear}${selectedMonth ? `_${MONTHS[selectedMonth]?.label}` : ""}.pdf`);
     } catch (err) {
       console.error("Export failed:", err);
-      alert("Failed to export PDF report");
     } finally {
       setExporting(false);
     }
   };
 
-  const totalRevenue    = financials.reduce((sum, f) => sum + Number(f.revenue || 0), 0);
-  const totalExpenses   = allExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const totalCommission = financials.reduce((sum, f) => sum + Number(f.commission || 0), 0);
-  const totalNetProfit  = financials.reduce((sum, f) => sum + Number(f.owner_payout || f.net_profit || 0), 0);
+  const totalRevenue    = financials.reduce((s, f) => s + Number(f.revenue    || 0), 0);
+  const totalExpenses   = allExpenses.reduce((s, e) => s + Number(e.amount    || 0), 0);
+  const totalCommission = financials.reduce((s, f) => s + Number(f.commission || 0), 0);
+  const totalNetProfit  = financials.reduce((s, f) => s + Number(f.owner_payout || f.net_profit || 0), 0);
 
   const monthlyChartData = (() => {
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const data = months.map((month) => ({ month, revenue: 0, commission: 0, expenses: 0, netProfit: 0 }));
+    const data   = months.map(m => ({ month: m, revenue: 0, commission: 0, expenses: 0, netProfit: 0 }));
     financials.forEach(f => {
-      const monthIdx = (f.month || 1) - 1;
-      if (monthIdx >= 0 && monthIdx < 12) {
-        data[monthIdx].revenue    += Number(f.revenue || 0);
-        data[monthIdx].commission += Number(f.commission || 0);
-        data[monthIdx].netProfit  += Number(f.owner_payout || f.net_profit || 0);
+      const i = (f.month || 1) - 1;
+      if (i >= 0 && i < 12) {
+        data[i].revenue    += Number(f.revenue    || 0);
+        data[i].commission += Number(f.commission || 0);
+        data[i].netProfit  += Number(f.owner_payout || f.net_profit || 0);
       }
     });
-    allExpenses.forEach(exp => {
-      const expDate = new Date(exp.date);
-      const monthIdx = expDate.getMonth();
-      if (monthIdx >= 0 && monthIdx < 12 && expDate.getFullYear() === selectedYear) {
-        data[monthIdx].expenses += Number(exp.amount || 0);
-      }
+    allExpenses.forEach(e => {
+      const d = new Date(e.date);
+      const i = d.getMonth();
+      if (i >= 0 && i < 12 && d.getFullYear() === selectedYear)
+        data[i].expenses += Number(e.amount || 0);
     });
     return data;
   })();
@@ -305,7 +306,6 @@ export default function OwnerEarningsPage() {
     acc[e.category] = (acc[e.category] || 0) + Number(e.amount);
     return acc;
   }, {} as Record<string, number>);
-
   const expenseCategories = Object.entries(expensesByCategory).map(([name, value]) => ({ name, value }));
   const COLORS = ['#22c55e','#16a34a','#4ade80','#86efac','#bbf7d0','#dcfce7'];
 
@@ -320,43 +320,31 @@ export default function OwnerEarningsPage() {
     f.month_display?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const getMonthLabel = () => {
-    if (selectedMonth === 0) return tx.fullYear(selectedYear);
-    return `${MONTHS[selectedMonth]?.label} ${selectedYear}`;
-  };
-
+  const getMonthLabel = () =>
+    selectedMonth === 0 ? tx.fullYear(selectedYear) : `${MONTHS[selectedMonth]?.label} ${selectedYear}`;
 
   const dir = isRTL ? "rtl" : "ltr";
-  const f   = isRTL ? "'Cairo'" : "'Geist'";
-
+  const ff  = isRTL ? "'Cairo'" : "'Geist'";
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
-    .oe { font-family: ${f}, system-ui, sans-serif; direction: ${dir}; }
-    .oe-lang{display:flex;align-items:center;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;}
-    .oe-lang-btn{padding:5px 11px;font-size:12px;font-weight:500;font-family:${f},system-ui,sans-serif;border:none;background:none;color:#9ca3af;cursor:pointer;transition:background .12s,color .12s;line-height:1;}
-    .oe-lang-btn:first-child{border-right:1px solid #e5e7eb;}
-    .oe-lang-btn.on{background:#22c55e;color:#fff;}
-    .oe-lang-btn:not(.on):hover{background:#f9fafb;color:#374151;}
+    .oe { font-family: ${ff}, system-ui, sans-serif; direction: ${dir}; }
   `;
 
-  if (loading) {
-    return (
-      <div className="p-8 bg-[#f9fafb] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#22c55e] mx-auto"></div>
-          <p className="mt-4 text-gray-600">{i18n[lang].loading}</p>
-        </div>
+  if (loading) return (
+    <div className="p-8 bg-[#f9fafb] min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#22c55e] mx-auto" />
+        <p className="mt-4 text-gray-600">{tx.loading}</p>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <>
       <style>{css}</style>
       <div className="oe p-8 bg-[#f9fafb] min-h-screen">
 
-        {/* Header */}
         <div className={`flex justify-between items-start mb-8 flex-wrap gap-4 ${isRTL ? "flex-row-reverse" : ""}`}>
           <div>
             <p className="text-sm text-gray-400 mb-1">{tx.breadcrumb}</p>
@@ -364,35 +352,27 @@ export default function OwnerEarningsPage() {
             <p className="text-sm text-gray-500 mt-1">{tx.subtitle}</p>
           </div>
           <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white hover:bg-gray-50 transition-colors ${isRTL ? "flex-row-reverse" : ""}`}
-            >
-              <Filter size={16} />
-              {tx.filter}
+            <button onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white hover:bg-gray-50 transition-colors ${isRTL ? "flex-row-reverse" : ""}`}>
+              <Filter size={16} />{tx.filter}
             </button>
-            <button
-              onClick={handleExportPDF}
-              disabled={exporting}
-              className={`flex items-center gap-2 bg-[#22c55e] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#16a34a] transition-all disabled:opacity-70 ${isRTL ? "flex-row-reverse" : ""}`}
-            >
-              {exporting ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <FileText size={16} />}
+            <button onClick={handleExportPDF} disabled={exporting || financials.length === 0}
+              className={`flex items-center gap-2 bg-[#22c55e] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#16a34a] transition-all disabled:opacity-70 ${isRTL ? "flex-row-reverse" : ""}`}>
+              {exporting
+                ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : <FileText size={16} />}
               {exporting ? tx.generating : tx.exportPDF}
             </button>
           </div>
         </div>
 
-        {/* Filter Bar */}
         {showFilters && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
             <div className={`flex flex-wrap gap-4 items-end ${isRTL ? "flex-row-reverse" : ""}`}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">{tx.year}</label>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:outline-none focus:border-[#22c55e]"
-                >
+                <select value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white focus:outline-none focus:border-[#22c55e]">
                   <option value={2024}>2024</option>
                   <option value={2025}>2025</option>
                   <option value={2026}>2026</option>
@@ -400,27 +380,19 @@ export default function OwnerEarningsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">{tx.month}</label>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white min-w-[140px] focus:outline-none focus:border-[#22c55e]"
-                >
-                  {MONTHS.map(m => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
+                <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium bg-white min-w-[140px] focus:outline-none focus:border-[#22c55e]">
+                  {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
               </div>
-              <button
-                onClick={() => { setSelectedYear(new Date().getFullYear()); setSelectedMonth(0); }}
-                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-              >
+              <button onClick={() => { setSelectedYear(new Date().getFullYear()); setSelectedMonth(0); }}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
                 {tx.resetFilters}
               </button>
             </div>
           </div>
         )}
 
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <div className={`flex items-center gap-2 mb-2 ${isRTL ? "flex-row-reverse" : ""}`}>
@@ -444,7 +416,9 @@ export default function OwnerEarningsPage() {
               <span className="text-xs text-gray-400">{tx.agencyComm}</span>
             </div>
             <p className="text-2xl font-bold text-red-500">{totalCommission.toLocaleString()} MAD</p>
-            <p className="text-xs text-gray-400 mt-1">{tx.pctRevenue}</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {totalRevenue > 0 ? ((totalCommission/totalRevenue)*100).toFixed(0) : 0}{tx.pctRevenue}
+            </p>
           </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <div className={`flex items-center gap-2 mb-2 ${isRTL ? "flex-row-reverse" : ""}`}>
@@ -456,37 +430,35 @@ export default function OwnerEarningsPage() {
           </div>
         </div>
 
-        {/* Monthly Earnings Trend */}
         {selectedMonth === 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
             <h2 className="font-bold text-gray-900 text-lg mb-4">{tx.monthlyTrend(selectedYear)}</h2>
             <ResponsiveContainer width="100%" height={350}>
               <AreaChart data={monthlyChartData}>
                 <defs>
-                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.15} />
+                  <linearGradient id="rGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#22c55e" stopOpacity={0.15} />
                     <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="profitGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#16a34a" stopOpacity={0.15} />
+                  <linearGradient id="pGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#16a34a" stopOpacity={0.15} />
                     <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} />
-                <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                <Tooltip formatter={(value) => [`${Number(value).toLocaleString()} MAD`]} />
-                <Area type="monotone" dataKey="revenue"    name={tx.revenue_chart}    stroke="#22c55e" strokeWidth={2} fill="url(#revenueGrad)" />
-                <Area type="monotone" dataKey="commission" name={tx.commission_chart}  stroke="#ef4444" strokeWidth={2} fill="none" strokeDasharray="5 5" />
+                <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                <Tooltip formatter={v => [`${Number(v).toLocaleString()} MAD`]} />
+                <Area type="monotone" dataKey="revenue"    name={tx.revenue_chart}    stroke="#22c55e" strokeWidth={2} fill="url(#rGrad)" />
+                <Area type="monotone" dataKey="commission" name={tx.commission_chart} stroke="#ef4444" strokeWidth={2} fill="none" strokeDasharray="5 5" />
                 <Area type="monotone" dataKey="expenses"   name={tx.expenses_chart}   stroke="#f97316" strokeWidth={2} fill="none" strokeDasharray="5 5" />
-                <Area type="monotone" dataKey="netProfit"  name={tx.netProfit_chart}  stroke="#16a34a" strokeWidth={2} fill="url(#profitGrad)" />
+                <Area type="monotone" dataKey="netProfit"  name={tx.netProfit_chart}  stroke="#16a34a" strokeWidth={2} fill="url(#pGrad)" />
                 <Legend />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         )}
 
-        {/* Revenue Distribution */}
         {revenueBreakdown.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
             <h2 className="font-bold text-gray-900 text-lg mb-4">{tx.revDist(getMonthLabel())}</h2>
@@ -494,16 +466,14 @@ export default function OwnerEarningsPage() {
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
                   <Pie data={revenueBreakdown} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                    {revenueBreakdown.map((item, index) => (
-                      <Cell key={`cell-${index}`} fill={item.color} />
-                    ))}
+                    label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`}>
+                    {revenueBreakdown.map((item, i) => <Cell key={i} fill={item.color} />)}
                   </Pie>
-                  <Tooltip formatter={(value) => `${Number(value).toLocaleString()} MAD`} />
+                  <Tooltip formatter={v => `${Number(v).toLocaleString()} MAD`} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="space-y-3">
-                {revenueBreakdown.map((item) => (
+                {revenueBreakdown.map(item => (
                   <div key={item.name} className={`flex justify-between items-center p-3 border-b border-gray-100 ${isRTL ? "flex-row-reverse" : ""}`}>
                     <div className={`flex items-center gap-2 ${isRTL ? "flex-row-reverse" : ""}`}>
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
@@ -523,7 +493,6 @@ export default function OwnerEarningsPage() {
           </div>
         )}
 
-        {/* Expenses by Category */}
         {expenseCategories.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-8">
             <h2 className="font-bold text-gray-900 text-lg mb-4">{tx.expByCat(getMonthLabel())}</h2>
@@ -532,13 +501,13 @@ export default function OwnerEarningsPage() {
                 <BarChart data={expenseCategories}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(value) => `${Number(value).toLocaleString()} MAD`} />
+                  <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
+                  <Tooltip formatter={v => `${Number(v).toLocaleString()} MAD`} />
                   <Bar dataKey="value" fill="#22c55e" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
               <div className="space-y-2">
-                {expenseCategories.map((cat) => (
+                {expenseCategories.map(cat => (
                   <div key={cat.name} className={`flex justify-between items-center p-2 border-b border-gray-100 ${isRTL ? "flex-row-reverse" : ""}`}>
                     <span className="text-sm text-gray-600">{cat.name}</span>
                     <span className="font-semibold text-orange-500">{cat.value.toLocaleString()} MAD</span>
@@ -555,36 +524,35 @@ export default function OwnerEarningsPage() {
           </div>
         )}
 
-        {/* Financial Breakdown */}
         <div className="bg-[#f0fdf4] rounded-2xl p-6 mb-8 border border-green-100">
           <h2 className="font-bold text-gray-900 text-lg mb-4">{tx.finBreakdown(getMonthLabel())}</h2>
           <div className="space-y-3 max-w-2xl">
             <div className={`flex justify-between items-center pb-3 border-b border-green-200 ${isRTL ? "flex-row-reverse" : ""}`}>
               <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
-                <div className="w-2 h-2 bg-[#22c55e] rounded-full"></div>
+                <div className="w-2 h-2 bg-[#22c55e] rounded-full" />
                 <span className="text-gray-700">{tx.totalRevBook}</span>
               </div>
               <span className="font-semibold text-gray-900">{totalRevenue.toLocaleString()} MAD</span>
             </div>
-            <div className={`flex justify-between items-center pb-3 border-b border-green-200 ${isRTL ? "pr-6" : "pl-6"} ${isRTL ? "flex-row-reverse" : ""}`}>
+            <div className={`flex justify-between items-center pb-3 border-b border-green-200 ${isRTL ? "pr-6 flex-row-reverse" : "pl-6"}`}>
               <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
-                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-red-500 rounded-full" />
                 <span className="text-gray-600">
-                  {tx.agencyCommPct(totalRevenue > 0 ? ((totalCommission / totalRevenue) * 100).toFixed(0) : "15")}
+                  {tx.agencyCommPct(totalRevenue > 0 ? ((totalCommission/totalRevenue)*100).toFixed(0) : "0")}
                 </span>
               </div>
               <span className="text-red-500">-{totalCommission.toLocaleString()} MAD</span>
             </div>
-            <div className={`flex justify-between items-center pb-3 border-b border-green-200 ${isRTL ? "pr-6" : "pl-6"} ${isRTL ? "flex-row-reverse" : ""}`}>
+            <div className={`flex justify-between items-center pb-3 border-b border-green-200 ${isRTL ? "pr-6 flex-row-reverse" : "pl-6"}`}>
               <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
-                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                <div className="w-2 h-2 bg-orange-500 rounded-full" />
                 <span className="text-gray-600">{tx.expensesDetail}</span>
               </div>
               <span className="text-orange-500">-{totalExpenses.toLocaleString()} MAD</span>
             </div>
             <div className={`flex justify-between items-center pt-3 ${isRTL ? "flex-row-reverse" : ""}`}>
               <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
-                <div className="w-2 h-2 bg-[#22c55e] rounded-full"></div>
+                <div className="w-2 h-2 bg-[#22c55e] rounded-full" />
                 <span className="font-bold text-gray-900">{tx.yourEarnings}</span>
               </div>
               <span className="text-xl font-bold text-[#22c55e]">{totalNetProfit.toLocaleString()} MAD</span>
@@ -594,17 +562,16 @@ export default function OwnerEarningsPage() {
             <div className={`flex justify-between items-center mb-2 ${isRTL ? "flex-row-reverse" : ""}`}>
               <span className="text-sm text-gray-500">{tx.profitMargin}</span>
               <span className="text-sm font-semibold text-[#22c55e]">
-                {totalRevenue > 0 ? ((totalNetProfit / totalRevenue) * 100).toFixed(1) : 0}%
+                {totalRevenue > 0 ? ((totalNetProfit/totalRevenue)*100).toFixed(1) : 0}%
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div className="bg-[#22c55e] h-2 rounded-full transition-all"
-                style={{ width: `${totalRevenue > 0 ? (totalNetProfit / totalRevenue) * 100 : 0}%` }} />
+                style={{ width: `${totalRevenue > 0 ? Math.min((totalNetProfit/totalRevenue)*100, 100) : 0}%` }} />
             </div>
           </div>
         </div>
 
-        {/* Detailed Earnings Ledger */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className={`p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 ${isRTL ? "sm:flex-row-reverse" : ""}`}>
             <h2 className="font-bold text-gray-900 text-lg">{tx.ledger(getMonthLabel())}</h2>
@@ -612,10 +579,7 @@ export default function OwnerEarningsPage() {
               <span className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 text-gray-400`}>
                 <Search size={16} />
               </span>
-              <input
-                type="text"
-                placeholder={tx.searchPlaceholder}
-                value={search}
+              <input type="text" placeholder={tx.searchPlaceholder} value={search}
                 onChange={e => setSearch(e.target.value)}
                 className={`w-64 ${isRTL ? "pr-10 pl-4" : "pl-10 pr-4"} py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-[#22c55e] bg-gray-50`}
               />
@@ -626,12 +590,9 @@ export default function OwnerEarningsPage() {
             <table className="w-full text-left" style={{ direction: dir }}>
               <thead>
                 <tr className="border-t border-gray-100 bg-gray-50">
-                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.date}</th>
-                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.propName}</th>
-                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.revenue}</th>
-                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.expenses}</th>
-                  <th className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{tx.commission}</th>
-                  <th className="px-6 py-3 text-sm font-semibold text-green-600">{tx.netToOwner}</th>
+                  {[tx.date, tx.propName, tx.revenue, tx.expenses, tx.commission, tx.netToOwner].map(h => (
+                    <th key={h} className="px-6 py-3 text-sm font-semibold text-[#22c55e]">{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -641,8 +602,9 @@ export default function OwnerEarningsPage() {
                       {tx.noEarnings(getMonthLabel())}
                     </td>
                   </tr>
-                ) : (
-                  filtered.map((f, i) => (
+                ) : filtered.map((f, i) => {
+                  const rowExpenses = getExpensesForMonth(f.month, f.year);
+                  return (
                     <tr key={i} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 text-gray-500 text-sm">
                         <div className={`flex items-center gap-1 ${isRTL ? "flex-row-reverse" : ""}`}>
@@ -652,16 +614,21 @@ export default function OwnerEarningsPage() {
                       </td>
                       <td className="px-6 py-4 font-medium text-gray-900">{f.property.name}</td>
                       <td className="px-6 py-4 text-gray-700 font-semibold">{Number(f.revenue).toLocaleString()} MAD</td>
-                      <td className="px-6 py-4 text-orange-500">{Number(f.expenses).toLocaleString()} MAD</td>
+                      <td className="px-6 py-4 text-orange-500">
+                        {rowExpenses > 0 ? rowExpenses.toLocaleString() : "0"} MAD
+                      </td>
                       <td className="px-6 py-4 text-red-500">{Number(f.commission).toLocaleString()} MAD</td>
-                      <td className="px-6 py-4 font-bold text-[#22c55e]">{Number(f.owner_payout || f.net_profit || 0).toLocaleString()} MAD</td>
+                      <td className="px-6 py-4 font-bold text-[#22c55e]">
+                        {Number(f.owner_payout || f.net_profit || 0).toLocaleString()} MAD
+                      </td>
                     </tr>
-                  ))
-                )}
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
+
       </div>
     </>
   );

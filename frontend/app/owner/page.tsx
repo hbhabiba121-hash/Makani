@@ -12,6 +12,7 @@ import {
   User
 } from "lucide-react";
 import api from "@/lib/axios";
+import { useLang } from "./contexts/LanguageContext";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -32,7 +33,7 @@ const labels = {
     outOf:          "sur",
     total:          "au total",
     netPayout:      "Paiement net (à recevoir)",
-    afterComm:      "Après 15% de commission",
+    afterComm:      "Après commission de l'agence",
     noPropTitle:    "Aucune propriété",
     noPropSub:      "Vous n'avez aucune propriété enregistrée à votre nom.",
     addProp:        "+ Ajouter une propriété",
@@ -43,7 +44,7 @@ const labels = {
     propName:       "Nom de la propriété",
     statusDate:     "Statut / Date",
     grossRev:       "Revenu brut",
-    commission:     "Commission (15%)",
+    commission:     "Commission",
     netPayoutCol:   "Paiement net",
     loading:        "Chargement de votre tableau de bord...",
   },
@@ -63,7 +64,7 @@ const labels = {
     outOf:          "من أصل",
     total:          "إجمالي",
     netPayout:      "صافي المدفوعات",
-    afterComm:      "بعد عمولة 15%",
+    afterComm:      "بعد عمولة الوكالة",
     noPropTitle:    "لا توجد عقارات",
     noPropSub:      "لا توجد عقارات مسجلة باسمك.",
     addProp:        "+ إضافة عقار",
@@ -74,14 +75,13 @@ const labels = {
     propName:       "اسم العقار",
     statusDate:     "الحالة / التاريخ",
     grossRev:       "الإيراد الإجمالي",
-    commission:     "العمولة (15%)",
+    commission:     "العمولة",
     netPayoutCol:   "صافي المدفوعات",
     loading:        "جارٍ تحميل لوحة التحكم...",
   },
 } as const;
 
 type Lang = "fr" | "ar";
-
 interface Property {
   id: number;
   name: string;
@@ -96,10 +96,11 @@ interface Financial {
   month: number;
   month_display: string;
   year: number;
-  revenue: string;
-  expenses: string;
-  commission: string;
-  owner_payout: string;
+  revenue: string | number;
+  expenses: string | number;
+  commission: number | string;
+  commission_rate?: string;
+  net_profit: number | string;
 }
 
 interface UserType {
@@ -110,28 +111,34 @@ interface UserType {
   role: string;
 }
 
+const toNum = (v: string | number | undefined | null): number => {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return isFinite(n) ? n : 0;
+};
+
 export default function OwnerDashboardPage() {
-
   const router = useRouter();
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [financials, setFinancials] = useState<Financial[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<UserType | null>(null);
-  const currentYear = new Date().getFullYear();
-  const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+  const [properties, setProperties]   = useState<Property[]>([]);
+  const [financials, setFinancials]   = useState<Financial[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [user, setUser]               = useState<UserType | null>(null);
+  const { lang } = useLang();
 
-  const [lang, setLang] = useState<Lang>("fr");
-  const tx = labels[lang];
+  const currentYear  = new Date().getFullYear();
+  const currentMonth = new Date().toLocaleString("default", { month: "long" });
+
+  const tx    = labels[lang];
   const isRTL = lang === "ar";
 
   useEffect(() => {
-    const token = localStorage.getItem("access");
+    const token   = localStorage.getItem("access");
     const userStr = localStorage.getItem("user");
     if (!token) { router.push("/login"); return; }
     if (userStr) {
       const userData = JSON.parse(userStr);
       setUser(userData);
-      if (userData.role !== 'owner') { router.push("/unauthorized"); return; }
+      if (userData.role !== "owner") { router.push("/unauthorized"); return; }
     } else {
       fetchUserData();
     }
@@ -139,31 +146,33 @@ export default function OwnerDashboardPage() {
 
   const fetchUserData = async () => {
     try {
-      const response = await api.get("/api/users/profile/");
-      setUser(response.data);
-      localStorage.setItem("user", JSON.stringify(response.data));
-    } catch (error) {
-      console.error("Error fetching user:", error);
+      const res = await api.get("/api/users/profile/");
+      setUser(res.data);
+      localStorage.setItem("user", JSON.stringify(res.data));
+    } catch {
       router.push("/login");
     }
   };
 
-  useEffect(() => {
-    if (user) fetchData();
-  }, [user]);
+  useEffect(() => { if (user) fetchData(); }, [user]);
 
   const fetchData = async () => {
     try {
-      const propsRes = await api.get("/api/properties/");
-      const propsData = Array.isArray(propsRes.data) ? propsRes.data : propsRes.data.results ?? [];
+      const propsRes  = await api.get("/api/properties/");
+      const propsData: Property[] = Array.isArray(propsRes.data)
+        ? propsRes.data
+        : propsRes.data.results ?? [];
       setProperties(propsData);
+
       const allFinancials: Financial[] = [];
       for (const prop of propsData) {
         try {
-          const finRes = await api.get(`/api/financials/summary/${prop.id}/?year=${currentYear}&month=${new Date().getMonth() + 1}`);
+          const finRes = await api.get(
+            `/api/financials/summary/${prop.id}/?year=${currentYear}&month=${new Date().getMonth() + 1}`
+          );
           const finData = Array.isArray(finRes.data) ? finRes.data : [];
           allFinancials.push(...finData);
-        } catch (e) {
+        } catch {
           console.warn(`No financial data for property ${prop.id}`);
         }
       }
@@ -176,17 +185,24 @@ export default function OwnerDashboardPage() {
   };
 
   const totalRevenue = financials.length > 0
-    ? financials.reduce((sum, f) => sum + Number(f.revenue), 0)
-    : properties.reduce((sum, p) => sum + Number(p.monthly_rent), 0);
+    ? financials.reduce((sum, f) => sum + toNum(f.revenue), 0)
+    : properties.reduce((sum, p) => sum + toNum(p.monthly_rent), 0);
 
   const totalPayout = financials.length > 0
-    ? financials.reduce((sum, f) => sum + Number(f.owner_payout), 0)
-    : properties.reduce((sum, p) => sum + (Number(p.monthly_rent) * 0.85), 0);
+    ? financials.reduce((sum, f) => sum + toNum(f.net_profit), 0)
+    : properties.reduce((sum, p) => sum + toNum(p.monthly_rent) * 0.80, 0);
 
   const activeProperties = properties.filter(
     p => p.status === "available" || p.status === "rented"
   ).length;
 
+  // commission rate displayed under the "net payout" card
+  const firstFin = financials[0];
+  const displayCommissionRate = firstFin?.commission_rate
+    ? toNum(firstFin.commission_rate)
+    : 20;
+
+  // ── PDF ───────────────────────────────────────────────────────────────────
   const downloadPDFReport = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
@@ -196,13 +212,25 @@ export default function OwnerDashboardPage() {
       doc.text(`Owner: ${user.first_name} ${user.last_name} (${user.email})`, 14, 30);
     }
     const tableData = financials.length > 0
-      ? financials.map(f => [f.property.name, f.month_display, `${f.revenue} MAD`, `-${f.commission} MAD`, `${f.owner_payout} MAD`])
-      : properties.map(p => [p.name, "Current", `${p.monthly_rent} MAD`, `-${Math.round(Number(p.monthly_rent)*0.15)} MAD`, `${Math.round(Number(p.monthly_rent)*0.85)} MAD`]);
+      ? financials.map(f => [
+          f.property.name,
+          f.month_display,
+          `${toNum(f.revenue).toLocaleString()} MAD`,
+          `-${toNum(f.commission).toLocaleString()} MAD`,
+          `${toNum(f.net_profit).toLocaleString()} MAD`,
+        ])
+      : properties.map(p => [
+          p.name,
+          "Current",
+          `${toNum(p.monthly_rent).toLocaleString()} MAD`,
+          `-${Math.round(toNum(p.monthly_rent) * 0.20).toLocaleString()} MAD`,
+          `${Math.round(toNum(p.monthly_rent) * 0.80).toLocaleString()} MAD`,
+        ]);
     autoTable(doc, {
       startY: 35,
-      head: [['Property', 'Period', 'Gross Revenue', 'Commission (15%)', 'Net Payout']],
+      head: [["Property", "Period", "Gross Revenue", "Commission", "Net Payout"]],
       body: tableData,
-      theme: 'grid',
+      theme: "grid",
       headStyles: { fillColor: [34, 197, 94] },
     });
     doc.save(`Owner_Report_${currentMonth}_${currentYear}.pdf`);
@@ -210,8 +238,10 @@ export default function OwnerDashboardPage() {
 
   const contactSupport = () => {
     const phoneNumber = "212600000000";
-    const message = encodeURIComponent(`Hello Makani Support, I am an owner (${user?.email}) and I have a question regarding my dashboard for ${currentMonth}.`);
-    window.open(`https://wa.me/${phoneNumber}?text=${message}`, '_blank');
+    const message = encodeURIComponent(
+      `Hello Makani Support, I am an owner (${user?.email}) and I have a question regarding my dashboard for ${currentMonth}.`
+    );
+    window.open(`https://wa.me/${phoneNumber}?text=${message}`, "_blank");
   };
 
   const statusStyle = (status: string) => {
@@ -222,7 +252,6 @@ export default function OwnerDashboardPage() {
       default:            return { bg: "#f9fafb", color: "#6b7280" };
     }
   };
- 
 
   const css = `
     @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
@@ -249,6 +278,38 @@ export default function OwnerDashboardPage() {
       min-height:  100vh;
       padding:     2rem;
       color:       var(--ink);
+    }
+
+    /* ── language toggle ── */
+    .od-lang-bar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 1rem;
+    }
+    .od-lang-toggle {
+      display: flex;
+      border: 1px solid var(--border-2);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .od-lang-btn {
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      background: var(--surface);
+      color: var(--ink-3);
+      cursor: pointer;
+      font-family: var(--f);
+      transition: background 0.12s, color 0.12s;
+    }
+    .od-lang-btn.active {
+      background: var(--green);
+      color: #fff;
+    }
+    .od-lang-btn:not(.active):hover {
+      background: var(--bg);
+      color: var(--ink);
     }
 
     .od-banner {
@@ -401,11 +462,6 @@ export default function OwnerDashboardPage() {
       <style>{css}</style>
       <div className="od">
 
-        <div style={{ display: "none" }}>
-          <button onClick={() => setLang("fr")}>FR</button>
-          <button onClick={() => setLang("ar")}>AR</button>
-        </div>
-
         {user && (
           <div className="od-banner">
             <div>
@@ -421,7 +477,6 @@ export default function OwnerDashboardPage() {
           </div>
         )}
 
-        {/* Header row */}
         <div className="od-header">
           <div>
             <div className="od-breadcrumb">
@@ -431,7 +486,6 @@ export default function OwnerDashboardPage() {
             </div>
             <h1 className="od-title">{tx.overview}</h1>
           </div>
-
           <div className="od-actions">
             <button className="od-btn-outline" onClick={contactSupport}>
               <MessageCircle size={15} strokeWidth={1.8} />
@@ -453,7 +507,9 @@ export default function OwnerDashboardPage() {
           <div className="od-card">
             <div>
               <div className="od-card-label">{tx.totalEarnings}</div>
-              <div className="od-card-value">{Math.round(totalRevenue).toLocaleString()} MAD</div>
+              <div className="od-card-value">
+                {Math.round(totalRevenue).toLocaleString()} MAD
+              </div>
             </div>
             <div className="od-card-icon" style={{ background: "var(--green-dim)" }}>
               <DollarSign size={18} color="var(--green-text)" strokeWidth={2} />
@@ -474,8 +530,12 @@ export default function OwnerDashboardPage() {
           <div className="od-card">
             <div>
               <div className="od-card-label">{tx.netPayout}</div>
-              <div className="od-card-value">{Math.round(totalPayout).toLocaleString()} MAD</div>
-              <div className="od-card-sub">{tx.afterComm}</div>
+              <div className="od-card-value">
+                {Math.round(totalPayout).toLocaleString()} MAD
+              </div>
+              <div className="od-card-sub">
+                {tx.afterComm} ({displayCommissionRate}%)
+              </div>
             </div>
             <div className="od-card-icon" style={{ background: "#eff6ff" }}>
               <Wallet size={18} color="#2563eb" strokeWidth={2} />
@@ -484,17 +544,23 @@ export default function OwnerDashboardPage() {
 
         </div>
 
+        {/* ── Empty state ── */}
         {properties.length === 0 && (
           <div className="od-empty">
             <Home size={48} className="od-empty-icon" />
             <div className="od-empty-title">{tx.noPropTitle}</div>
             <div className="od-empty-sub">{tx.noPropSub}</div>
-            <button className="od-btn-primary" style={{ margin: "0 auto" }} onClick={() => router.push("/owner/add-property")}>
+            <button
+              className="od-btn-primary"
+              style={{ margin: "0 auto" }}
+              onClick={() => router.push("/owner/add-property")}
+            >
               {tx.addProp}
             </button>
           </div>
         )}
 
+        {/* ── Earnings Table ── */}
         {properties.length > 0 && (
           <div className="od-table-card">
             <div className="od-table-head">
@@ -515,38 +581,59 @@ export default function OwnerDashboardPage() {
                   <th>{tx.propName}</th>
                   <th>{tx.statusDate}</th>
                   <th>{tx.grossRev}</th>
-                  <th>{tx.commission}</th>
+                  <th>{tx.commission} ({displayCommissionRate}%)</th>
                   <th>{tx.netPayoutCol}</th>
                 </tr>
               </thead>
               <tbody>
-                {financials.length > 0 ? financials.map((f, i) => (
-                  <tr key={i}>
-                    <td className="td-bold">{f.property.name}</td>
-                    <td className="td-muted">{f.month_display} {f.year}</td>
-                    <td style={{ fontWeight: 600 }}>{Number(f.revenue).toLocaleString()} MAD</td>
-                    <td className="td-muted">-{Number(f.commission).toLocaleString()} MAD</td>
-                    <td className="td-green">{Number(f.owner_payout).toLocaleString()} MAD</td>
-                  </tr>
-                )) : properties.map((p) => {
-                  const s = statusStyle(p.status);
-                  return (
-                    <tr key={p.id}>
-                      <td>
-                        <div className="td-bold">{p.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>{p.location}</div>
+                {financials.length > 0
+                  ? financials.map((f, i) => (
+                    <tr key={i}>
+                      <td className="td-bold">{f.property.name}</td>
+                      <td className="td-muted">{f.month_display} {f.year}</td>
+                      <td style={{ fontWeight: 600 }}>
+                        {toNum(f.revenue).toLocaleString()} MAD
                       </td>
-                      <td>
-                        <span className="status-badge" style={{ background: s.bg, color: s.color }}>
-                          {p.status_display}
-                        </span>
+                      <td className="td-muted">
+                        -{toNum(f.commission).toLocaleString()} MAD
                       </td>
-                      <td style={{ fontWeight: 600 }}>{Number(p.monthly_rent).toLocaleString()} MAD</td>
-                      <td className="td-muted">-{Math.round(Number(p.monthly_rent) * 0.15).toLocaleString()} MAD</td>
-                      <td className="td-green">{Math.round(Number(p.monthly_rent) * 0.85).toLocaleString()} MAD</td>
+                      <td className="td-green">
+                        {toNum(f.net_profit).toLocaleString()} MAD
+                      </td>
                     </tr>
-                  );
-                })}
+                  ))
+                  : properties.map((p) => {
+                    const s   = statusStyle(p.status);
+                    const rent = toNum(p.monthly_rent);
+                    return (
+                      <tr key={p.id}>
+                        <td>
+                          <div className="td-bold">{p.name}</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>
+                            {p.location}
+                          </div>
+                        </td>
+                        <td>
+                          <span
+                            className="status-badge"
+                            style={{ background: s.bg, color: s.color }}
+                          >
+                            {p.status_display}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 600 }}>
+                          {rent.toLocaleString()} MAD
+                        </td>
+                        <td className="td-muted">
+                          -{Math.round(rent * 0.20).toLocaleString()} MAD
+                        </td>
+                        <td className="td-green">
+                          {Math.round(rent * 0.80).toLocaleString()} MAD
+                        </td>
+                      </tr>
+                    );
+                  })
+                }
               </tbody>
             </table>
           </div>
