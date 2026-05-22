@@ -16,6 +16,7 @@ urlpatterns = [
     path('reports/', include('reports.urls')),
     path('api/reports/', include('reports.urls')),  # ADD THIS - supports both paths
     path('api-auth/', include('rest_framework.urls')),
+    path('api/payments/', include('payments.urls')),
 ]
 
 # Serve media files in development (for receipts/uploads)
