@@ -24,13 +24,12 @@ class PaymentSerializer(serializers.ModelSerializer):
     def get_property_name(self, obj):
         return obj.property.name if obj.property else "N/A"
 
-
 class PayoutSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     owner_name = serializers.SerializerMethodField()
     property_name = serializers.SerializerMethodField()
     payments = PaymentSerializer(many=True, read_only=True)
-    completion_percentage = serializers.SerializerMethodField()
+    completion_percentage = serializers.SerializerMethodField()  # This is a method, not a model field
     
     class Meta:
         model = Payout
@@ -53,8 +52,8 @@ class PayoutSerializer(serializers.ModelSerializer):
         if obj.net_owner_earnings > 0:
             return round((obj.amount_paid / obj.net_owner_earnings) * 100, 1)
         return 0
-
-
+    
+    
 class PaymentAlertSerializer(serializers.ModelSerializer):
     alert_type_display = serializers.CharField(source='get_alert_type_display', read_only=True)
     

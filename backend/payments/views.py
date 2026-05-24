@@ -1,4 +1,4 @@
-# backend/payments/views.py - COMPLETE FULLY FIXED VERSION
+# backend/payments/views.py - COMPLETE FIXED VERSION
 
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -122,9 +122,10 @@ class PayoutListView(generics.ListCreateAPIView):
                 due_date=timezone.now().date() + timedelta(days=30)
             )
 
+# backend/payments/views.py - REPLACE the entire PayoutSummaryView class
 
 class PayoutSummaryView(APIView):
-    """Get payout summary grouped with proper calculations"""
+    """Get payout summary grouped with proper calculations by month/year from financial records"""
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
@@ -132,48 +133,134 @@ class PayoutSummaryView(APIView):
         
         # Get all payouts based on role
         if user.role == 'admin':
-            payouts = Payout.objects.all().select_related('owner', 'property')
+            payouts = Payout.objects.all().select_related('owner', 'property', 'financial_record')
         elif user.role == 'staff':
-            payouts = Payout.objects.filter(agency=user.agency).select_related('owner', 'property')
+            payouts = Payout.objects.filter(agency=user.agency).select_related('owner', 'property', 'financial_record')
         elif user.role == 'owner':
-            payouts = Payout.objects.filter(owner=user).select_related('property')
+            payouts = Payout.objects.filter(owner=user).select_related('property', 'financial_record')
         else:
             payouts = Payout.objects.none()
         
-        # Build summary data
-        summary = []
-        for payout in payouts:
-            summary.append({
-                'id': payout.id,
-                'owner_name': f"{payout.owner.first_name} {payout.owner.last_name}" if payout.owner else 'N/A',
-                'owner_id': payout.owner.id if payout.owner else None,
-                'property_name': payout.property.name if payout.property else 'N/A',
-                'property_id': payout.property.id if payout.property else None,
-                'total_revenue': float(payout.total_revenue),
-                'commission': float(payout.commission),
-                'expenses': float(payout.expenses),
-                'net_owner_earnings': float(payout.net_owner_earnings),
-                'amount_paid': float(payout.amount_paid),
-                'remaining_balance': float(payout.remaining_balance),
-                'status': payout.status,
-                'status_display': payout.get_status_display(),
-                'due_date': payout.due_date,
-                'paid_date': payout.paid_date,
-                'completion_percentage': payout.completion_percentage,
-                'payments': [
-                    {
-                        'id': p.id,
-                        'amount': float(p.amount),
-                        'payment_method': p.payment_method,
-                        'payment_method_display': p.get_payment_method_display(),
-                        'payment_date': p.payment_date,
-                        'transaction_id': p.transaction_id
-                    } for p in payout.payments.all()
-                ]
-            })
+        # First, calculate total expenses per property per month from Expense model
+        from financials.models import Expense
+        from django.db.models import Sum
+        from datetime import date
         
-        return Response(summary)
-
+        expense_cache = {}
+        
+        # Get all unique property-month combinations from payouts
+        for payout in payouts:
+            if payout.financial_record:
+                prop_id = payout.property.id
+                month = payout.financial_record.month
+                year = payout.financial_record.year
+                key = f"{prop_id}_{year}_{month}"
+                
+                if key not in expense_cache:
+                    # Calculate total expenses for this property in this month
+                    start_date = date(year, month, 1)
+                    if month == 12:
+                        end_date = date(year + 1, 1, 1)
+                    else:
+                        end_date = date(year, month + 1, 1)
+                    
+                    total_expenses = Expense.objects.filter(
+                        property_id=prop_id,
+                        date__gte=start_date,
+                        date__lt=end_date
+                    ).aggregate(total=Sum('amount'))['total'] or 0
+                    
+                    expense_cache[key] = float(total_expenses)
+        
+        # Build summary data grouped by property and month
+        grouped = {}
+        
+        for payout in payouts:
+            if not payout.financial_record:
+                continue
+                
+            fr = payout.financial_record
+            month = fr.month
+            year = fr.year
+            prop_id = payout.property.id
+            owner_id = payout.owner.id
+            
+            # Create a unique key for grouping
+            group_key = f"{owner_id}_{prop_id}_{year}_{month}"
+            
+            # Get the correct total expenses for this property/month (not multiplied by number of records)
+            expense_key = f"{prop_id}_{year}_{month}"
+            total_expenses_for_month = expense_cache.get(expense_key, 0)
+            
+            if group_key not in grouped:
+                grouped[group_key] = {
+                    'id': group_key,
+                    'owner_name': f"{payout.owner.first_name} {payout.owner.last_name}" if payout.owner else 'N/A',
+                    'owner': payout.owner.id,
+                    'property_name': payout.property.name,
+                    'property': payout.property.id,
+                    'month': month,
+                    'year': year,
+                    'month_display': f"{month:02d}",
+                    'total_revenue': 0,
+                    'commission': 0,
+                    'expenses': total_expenses_for_month,  # Use the cached total, don't add per record
+                    'amount_paid': 0,
+                    'remaining_balance': 0,
+                    'status': 'pending',
+                    'status_display': 'En attente',
+                    'due_date': payout.due_date,
+                    'paid_date': payout.paid_date,
+                    'payments': []
+                }
+            
+            # Add revenue and commission from this payout (don't add expenses because we already set it)
+            grouped[group_key]['total_revenue'] += float(payout.total_revenue)
+            grouped[group_key]['commission'] += float(payout.commission)
+            grouped[group_key]['amount_paid'] += float(payout.amount_paid)
+            
+            # Add payments
+            for p in payout.payments.all():
+                grouped[group_key]['payments'].append({
+                    'id': p.id,
+                    'amount': float(p.amount),
+                    'payment_method': p.payment_method,
+                    'payment_method_display': p.get_payment_method_display(),
+                    'payment_date': p.payment_date,
+                    'transaction_id': p.transaction_id,
+                    'notes': p.notes
+                })
+        
+        # Calculate net and status for each group
+        result = []
+        for key, group in grouped.items():
+            # Calculate net owner earnings
+            group['net_owner_earnings'] = group['total_revenue'] - group['commission'] - group['expenses']
+            group['remaining_balance'] = group['net_owner_earnings'] - group['amount_paid']
+            
+            # Determine status
+            if group['remaining_balance'] <= 0.01:
+                group['status'] = 'paid'
+                group['status_display'] = 'Payé'
+            elif group['amount_paid'] > 0:
+                group['status'] = 'partial'
+                group['status_display'] = 'Partiel'
+            else:
+                group['status'] = 'pending'
+                group['status_display'] = 'En attente'
+            
+            # Calculate completion percentage
+            if group['net_owner_earnings'] > 0:
+                group['completion_percentage'] = round((group['amount_paid'] / group['net_owner_earnings']) * 100, 1)
+            else:
+                group['completion_percentage'] = 0
+            
+            result.append(group)
+        
+        # Sort by year and month descending
+        result.sort(key=lambda x: (x['year'], x['month']), reverse=True)
+        
+        return Response(result)
 
 class PayoutDetailView(generics.RetrieveUpdateAPIView):
     """Get, update payout details"""
@@ -183,9 +270,54 @@ class PayoutDetailView(generics.RetrieveUpdateAPIView):
 
 
 class PaymentCreateView(generics.CreateAPIView):
-    """Create a payment (Mark as Paid) - Updates remaining balance automatically"""
+    """Create a payment - Updates remaining balance automatically"""
     serializer_class = PaymentSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+    def create(self, request, *args, **kwargs):
+        # Get owner and property from request data
+        owner_id = request.data.get('owner')
+        property_id = request.data.get('property')
+        month_str = request.data.get('month')  # Format: YYYY-MM
+        amount = float(request.data.get('amount', 0))
+        
+        # Find the payout for this owner, property, and month
+        payout = None
+        
+        if month_str and '-' in month_str:
+            year, month_num = month_str.split('-')
+            month_num = int(month_num)
+            year = int(year)
+            
+            # Try to find the payout by financial record month/year
+            payout = Payout.objects.filter(
+                owner_id=owner_id,
+                property_id=property_id,
+                financial_record__month=month_num,
+                financial_record__year=year
+            ).first()
+            
+            if not payout:
+                # Try to find by due_date as fallback
+                payout = Payout.objects.filter(
+                    owner_id=owner_id,
+                    property_id=property_id,
+                    due_date__year=year,
+                    due_date__month=month_num
+                ).first()
+        
+        if not payout:
+            return Response(
+                {'error': 'No payout found for this property and period'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Add payout to request data
+        request.data._mutable = True
+        request.data['payout'] = payout.id
+        request.data._mutable = False
+        
+        return super().create(request, *args, **kwargs)
     
     def perform_create(self, serializer):
         payout_id = self.request.data.get('payout')
@@ -194,6 +326,7 @@ class PaymentCreateView(generics.CreateAPIView):
         
         # Create the payment
         payment = serializer.save(
+            payout=payout,
             agency=self.request.user.agency,
             owner=payout.owner,
             property=payout.property,
@@ -201,25 +334,22 @@ class PaymentCreateView(generics.CreateAPIView):
             created_by=self.request.user
         )
         
-        # Convert Decimal to float for calculation - FIXED
-        remaining_balance = float(payout.remaining_balance)
-        new_remaining = remaining_balance - amount
-        
         # Create alert for partial payment
-        if new_remaining > 0:
+        remaining_balance = float(payout.remaining_balance) - amount
+        if remaining_balance > 0:
             PaymentAlert.objects.create(
                 agency=payout.agency,
                 payout=payout,
                 alert_type='partial_payment',
-                title=f"Paiement partiel enregistré",
-                message=f"Paiement de {amount:.2f} MAD reçu de {payout.owner.first_name}. Restant: {new_remaining:.2f} MAD"
+                title="Paiement partiel enregistré",
+                message=f"Paiement de {amount:.2f} MAD reçu de {payout.owner.first_name}. Restant: {remaining_balance:.2f} MAD"
             )
-        elif abs(new_remaining) < 0.01:  # Handle floating point precision
+        elif abs(remaining_balance) < 0.01:
             PaymentAlert.objects.create(
                 agency=payout.agency,
                 payout=payout,
                 alert_type='pending_payout',
-                title=f"Paiement complété",
+                title="Paiement complété",
                 message=f"Le paiement pour {payout.property.name} a été complété. Montant total: {float(payout.net_owner_earnings):.2f} MAD"
             )
 
@@ -373,11 +503,9 @@ def generate_payouts_from_financials(request):
             # Check if property has owner attribute
             if hasattr(record.property, 'owner') and record.property.owner:
                 if hasattr(record.property.owner, 'user'):
-                    # Owner is an OwnerProfile object with user relation
                     owner = record.property.owner.user
                     print(f"  Owner found via owner.user: {owner}")
                 else:
-                    # Owner is already a User object
                     owner = record.property.owner
                     print(f"  Owner found directly: {owner}")
             

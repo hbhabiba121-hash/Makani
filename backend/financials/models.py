@@ -1,7 +1,8 @@
-# backend/financials/models.py - ADD BACK THE MISSING FIELDS
+# backend/financials/models.py - FIXED VERSION
 
 from django.db import models
 from properties.models import Property
+from decimal import Decimal
 
 class FinancialRecord(models.Model):
     class Month(models.IntegerChoices):
@@ -24,7 +25,7 @@ class FinancialRecord(models.Model):
     
     # Booking details
     guest_name = models.CharField(max_length=200, blank=True, default='')
-    booking_source = models.CharField(max_length=100, blank=True, default='')  # Airbnb, Booking.com, etc.
+    booking_source = models.CharField(max_length=100, blank=True, default='')
     nights = models.IntegerField(default=1)
     price_per_night = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
@@ -42,16 +43,43 @@ class FinancialRecord(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    def get_total_expenses_from_expense_model(self):
+        """Calculate total expenses from Expense model for this property and period - returns Decimal"""
+        from datetime import date
+        from django.db.models import Sum
+        from .models import Expense
+        
+        # Get the start and end date for this month/year
+        start_date = date(self.year, self.month, 1)
+        
+        # Get last day of month
+        if self.month == 12:
+            end_date = date(self.year + 1, 1, 1)
+        else:
+            end_date = date(self.year, self.month + 1, 1)
+        
+        # Sum all expenses for this property within this month
+        total = Expense.objects.filter(
+            property=self.property,
+            date__gte=start_date,
+            date__lt=end_date
+        ).aggregate(total=Sum('amount'))['total']
+        
+        if total is None:
+            return Decimal('0.00')
+        return Decimal(str(total))
+    
     def get_commission(self):
-        """Calculate commission amount"""
-        return self.revenue * (self.commission_rate / 100)
+        """Calculate commission amount - returns Decimal"""
+        return self.revenue * (self.commission_rate / Decimal('100'))
     
     def get_net_profit(self):
-        """Calculate net profit"""
-        return self.revenue - self.expenses - self.get_commission()
+        """Calculate net profit including expenses from Expense model - returns Decimal"""
+        total_expenses = self.expenses + self.get_total_expenses_from_expense_model()
+        return self.revenue - total_expenses - self.get_commission()
     
     def get_owner_payout(self):
-        """Calculate owner payout"""
+        """Calculate owner payout - returns Decimal"""
         return self.get_net_profit()
     
     def get_month_display(self):
@@ -63,10 +91,7 @@ class FinancialRecord(models.Model):
     
     class Meta:
         ordering = ['-year', '-month']
-        # Remove unique_together to allow multiple bookings per month
-        # unique_together = ('property', 'month', 'year')  # COMMENT THIS OUT
 
-    # backend/financials/models.py - Add this at the end of the file (after FinancialRecord class)
 
 class Expense(models.Model):
     class Category(models.TextChoices):

@@ -1,8 +1,8 @@
-# backend/payments/models.py
+# backend/payments/models.py - COMPLETE CLEAN VERSION
+
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
-from decimal import Decimal
 
 class PaymentStatus(models.TextChoices):
     PENDING = 'pending', 'Pending'
@@ -54,12 +54,16 @@ class Payout(models.Model):
             models.Index(fields=['agency', 'owner']),
         ]
     
+    def __str__(self):
+        return f"{self.owner.email} - {self.net_owner_earnings} - {self.status}"
+    
     def save(self, *args, **kwargs):
         # Calculate net earnings from financial record if available
         if self.financial_record and not self.total_revenue:
             self.total_revenue = self.financial_record.revenue
             self.expenses = self.financial_record.expenses
-            self.commission = self.financial_record.get_commission()
+            if hasattr(self.financial_record, 'get_commission'):
+                self.commission = self.financial_record.get_commission()
         
         self.net_owner_earnings = self.total_revenue - self.commission - self.expenses
         self.remaining_balance = self.net_owner_earnings - self.amount_paid
@@ -71,15 +75,12 @@ class Payout(models.Model):
                 self.paid_date = timezone.now().date()
         elif self.amount_paid > 0:
             self.status = PaymentStatus.PARTIAL
-        elif self.due_date < timezone.now().date() and self.amount_paid == 0:
+        elif self.due_date and self.due_date < timezone.now().date() and self.amount_paid == 0:
             self.status = PaymentStatus.OVERDUE
         else:
             self.status = PaymentStatus.PENDING
         
         super().save(*args, **kwargs)
-    
-    def __str__(self):
-        return f"{self.owner.email} - {self.net_owner_earnings} - {self.status}"
 
 
 class Payment(models.Model):
@@ -110,9 +111,9 @@ class Payment(models.Model):
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         # Update the payout's amount_paid
-        self.payout.amount_paid = self.payout.payments.aggregate(
-            total=models.Sum('amount')
-        )['total'] or 0
+        from django.db.models import Sum
+        total_paid = self.payout.payments.aggregate(total=Sum('amount'))['total'] or 0
+        self.payout.amount_paid = total_paid
         self.payout.save()
     
     def __str__(self):
@@ -139,3 +140,6 @@ class PaymentAlert(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.title} - {self.created_at}"
