@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import api from "@/lib/axios";
-import { useLang } from "../../contexts/LanguageContext";
+import { useLang } from "@/app/components/contexts/LanguageContext";
 
 type Lang = "fr" | "ar";
 

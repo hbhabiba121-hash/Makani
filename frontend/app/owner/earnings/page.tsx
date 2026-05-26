@@ -7,7 +7,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import api from "@/lib/axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { useLang } from "../contexts/LanguageContext";
+import { useLang } from "@/app/components/contexts/LanguageContext";
 
 const i18n = {
   fr: {
@@ -249,7 +249,7 @@ export default function OwnerEarningsPage() {
       doc.setTextColor(0);
 
       const tableData = financials.map(f => {
-        const rowExp = getExpensesForMonth(f.month, f.year); // ← expenses صحيحة
+        const rowExp = getExpensesForMonth(f.month, f.year); 
         return [
           `${f.month_display} ${f.year}`,
           f.property.name,

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { getCurrentUser, updateUserProfile, uploadProfileImage } from "@/lib/axios";
 
+
 interface UserType {
   id: number;
   email: string;
@@ -361,7 +362,6 @@ export default function OwnerProfilePage() {
 
       <div className="pf">
 
-        {/* Toast */}
         {message && (
           <div className={`pf-toast ${message.type === "success" ? "ok" : "err"}`}>
             {message.type === "success" ? <CheckCircle size={14}/> : <AlertCircle size={14}/>}
@@ -372,10 +372,8 @@ export default function OwnerProfilePage() {
           </div>
         )}
 
-        {/* ══ LEFT ══ */}
         <div className="pf-left">
 
-          {/* Avatar card */}
           <div className="pf-av-card">
             <div className="pf-av">
               {avatarSrc
@@ -415,10 +413,8 @@ export default function OwnerProfilePage() {
 
         </div>
 
-        {/* ══ RIGHT ══ */}
         <div className="pf-right">
 
-          {/* Personal info card */}
           <div className="pf-card">
             <div className="pf-card-head">
               <div>
@@ -444,7 +440,6 @@ export default function OwnerProfilePage() {
             </div>
 
             <div className="pf-card-body">
-              {/* Prénom */}
               <div className="pf-field">
                 <div className="pf-field-label"><User size={11}/> Prénom</div>
                 {editing
@@ -453,7 +448,6 @@ export default function OwnerProfilePage() {
                 }
               </div>
 
-              {/* Nom */}
               <div className="pf-field">
                 <div className="pf-field-label"><User size={11}/> Nom</div>
                 {editing
@@ -462,7 +456,6 @@ export default function OwnerProfilePage() {
                 }
               </div>
 
-              {/* Email */}
               <div className="pf-field">
                 <div className="pf-field-label"><Mail size={11}/> Adresse email</div>
                 {editing
@@ -471,7 +464,6 @@ export default function OwnerProfilePage() {
                 }
               </div>
 
-              {/* Rôle */}
               <div className="pf-field">
                 <div className="pf-field-label"><Briefcase size={11}/> Rôle</div>
                 <div className="pf-field-val" style={{ background:"transparent", border:"none", padding:"9.5px 0" }}>
@@ -481,7 +473,6 @@ export default function OwnerProfilePage() {
                 </div>
               </div>
 
-              {/* Agence */}
               {user?.agency && (
                 <div className="pf-field">
                   <div className="pf-field-label"><Building size={11}/> Agence</div>
@@ -489,7 +480,6 @@ export default function OwnerProfilePage() {
                 </div>
               )}
 
-              {/* Membre depuis */}
               {user?.created_at && (
                 <div className="pf-field">
                   <div className="pf-field-label"><Briefcase size={11}/> Membre depuis</div>

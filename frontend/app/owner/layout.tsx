@@ -19,7 +19,6 @@ import {
 import Navbar from "@/app/components/Navbar";
 import { LanguageProvider, useLang } from "@/app/components/contexts/LanguageContext";
 
-// ── i18n ──────────────────────────────────────────────────────
 const labels = {
   fr: {
     search: "Rechercher",
@@ -99,7 +98,6 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
     setIsCollapsed(!isCollapsed);
   };
 
-  // Handle keyboard shortcut (⌘K or Ctrl+K)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -419,7 +417,6 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
-          {/* Search */}
           <div className="sb-owner-search">
             <div className="sb-owner-search-inner">
               <Search size={13} className="sb-owner-search-icon" strokeWidth={1.8} />
@@ -446,7 +443,6 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* Main nav */}
           {!searchQuery && !isCollapsed && <div className="sb-owner-label">{tx.main}</div>}
           <nav className="sb-owner-nav">
             {(searchQuery ? filteredMainNav : mainNav).length > 0 ? (
@@ -466,7 +462,6 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
             )}
           </nav>
 
-          {/* Bottom nav - only show if no search query */}
           {!searchQuery && (
             <>
               <div className="sb-owner-divider" />
@@ -486,7 +481,6 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
           )}
         </aside>
 
-        {/* Main Content */}
         <div className="sb-owner-main">
           <Navbar lang={lang} />
           <main style={{ flex: 1, overflow: "auto", padding: "1.5rem" }}>

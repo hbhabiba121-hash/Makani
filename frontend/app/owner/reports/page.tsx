@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, FileText, Calendar, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import api from "@/lib/axios";
-import { useLang } from "../contexts/LanguageContext";
+import { useLang } from "@/app/components/contexts/LanguageContext";
 
 const i18n = {
   fr: {

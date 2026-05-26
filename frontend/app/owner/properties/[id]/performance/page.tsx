@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from "recharts";
 import api from "@/lib/axios";
-import { useLang } from "../../../contexts/LanguageContext";
+import { useLang } from "@/app/components/contexts/LanguageContext";
 
 const i18n = {
   fr: {
@@ -333,7 +333,6 @@ export default function PropertyPerformancePage() {
         </select>
       </div>
 
-      {/* Score banner */}
       <div className="pp-score">
         <div className="pp-score-l">
           <div className="pp-score-icon" style={{ background: rating.iconBg }}>
@@ -352,7 +351,6 @@ export default function PropertyPerformancePage() {
         </div>
       </div>
 
-      {/* KPIs */}
       <div className="pp-kpi-grid">
         <div className="pp-kpi">
           <div className="pp-kpi-top">
@@ -390,7 +388,6 @@ export default function PropertyPerformancePage() {
         </div>
       </div>
 
-      {/* Charts */}
       <div className="pp-charts">
         <div className="pp-chart-card">
           <div className="pp-chart-title">{tx.monthlyRevenue}<TrendingUp size={16} color="var(--ink-4)"/></div>
@@ -425,7 +422,6 @@ export default function PropertyPerformancePage() {
         </div>
       </div>
 
-      {/* Recent bookings */}
       <div className="pp-book-card">
         <div className="pp-book-head">
           <div className="pp-book-title">{tx.recentBookings}</div>
@@ -457,7 +453,6 @@ export default function PropertyPerformancePage() {
         )}
       </div>
 
-      {/* Insights */}
       <div className="pp-insights">
         <div className="pp-ins-title"><BarChart3 size={16} color="var(--green-text)"/>{tx.insights}</div>
         <div className="pp-ins-grid">

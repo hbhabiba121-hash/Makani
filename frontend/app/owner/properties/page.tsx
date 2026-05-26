@@ -8,7 +8,7 @@ import {
   Wallet, Award, AlertCircle, XCircle, BarChart3
 } from "lucide-react";
 import api from "@/lib/axios";
-import { useLang } from "../contexts/LanguageContext";
+import { useLang } from "@/app/components/contexts/LanguageContext";
 
 const labels = {
   fr: {
@@ -554,7 +554,6 @@ export default function OwnerPropertiesPage() {
                           <div className="op-perf-row">
                             <span className="op-perf-label"><DollarSign size={12} />{tx.avgNight}</span>
                             <span className="op-perf-val">
-                              {/* ── NaN-safe display ── */}
                               {metrics.totalNights > 0
                                 ? Math.round(metrics.avgPricePerNight).toLocaleString()
                                 : "—"} MAD

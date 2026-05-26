@@ -12,7 +12,7 @@ import {
   User
 } from "lucide-react";
 import api from "@/lib/axios";
-import { useLang } from "./contexts/LanguageContext";
+import { useLang } from "@/app/components/contexts/LanguageContext";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -196,13 +196,11 @@ export default function OwnerDashboardPage() {
     p => p.status === "available" || p.status === "rented"
   ).length;
 
-  // commission rate displayed under the "net payout" card
   const firstFin = financials[0];
   const displayCommissionRate = firstFin?.commission_rate
     ? toNum(firstFin.commission_rate)
     : 20;
 
-  // ── PDF ───────────────────────────────────────────────────────────────────
   const downloadPDFReport = () => {
     const doc = new jsPDF();
     doc.setFontSize(18);
@@ -544,7 +542,6 @@ export default function OwnerDashboardPage() {
 
         </div>
 
-        {/* ── Empty state ── */}
         {properties.length === 0 && (
           <div className="od-empty">
             <Home size={48} className="od-empty-icon" />
@@ -560,7 +557,6 @@ export default function OwnerDashboardPage() {
           </div>
         )}
 
-        {/* ── Earnings Table ── */}
         {properties.length > 0 && (
           <div className="od-table-card">
             <div className="od-table-head">
@@ -642,4 +638,4 @@ export default function OwnerDashboardPage() {
       </div>
     </>
   );
-}
+} 
