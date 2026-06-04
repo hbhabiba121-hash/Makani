@@ -1,4 +1,3 @@
-// frontend/app/staff/profile/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -29,10 +28,11 @@ interface UserType {
   created_at?: string;
 }
 
+// Harmonisation des badges avec la charte graphique de Makani
 const ROLES: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  admin: { label: "Administrateur", color: "#8b5cf6", bg: "#f5f3ff", border: "#ddd6fe" },
-  owner: { label: "Propriétaire",   color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
-  staff: { label: "Membre d'équipe", color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
+  admin: { label: "Administrateur", color: "#374151", bg: "#f3f4f6", border: "#e5e7eb" },
+  owner: { label: "Propriétaire",   color: "#059669", bg: "#ecfdf5", border: "#d1fae5" },
+  staff: { label: "Membre d'équipe", color: "#059669", bg: "#ecfdf5", border: "#d1fae5" },
 };
 
 export default function StaffProfilePage() {
@@ -132,16 +132,6 @@ export default function StaffProfilePage() {
     return roles[role] || role;
   };
 
-  const getProfilePictureUrl = () => {
-    if (imagePreview) return imagePreview;
-    if (user?.picture_url) {
-      if (user.picture_url.startsWith('http')) return user.picture_url;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      return `${baseUrl}${user.picture_url}`;
-    }
-    return null;
-  };
-
   const avatarSrc = imagePreview
     || (user?.picture_url?.startsWith("http")
         ? user.picture_url
@@ -154,7 +144,7 @@ export default function StaffProfilePage() {
 
   if (loading) return (
     <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60vh" }}>
-      <div style={{ width:36, height:36, border:"3px solid #f0fdf4", borderTop:"3px solid #22c55e", borderRadius:"50%", animation:"spin .8s linear infinite" }}/>
+      <div style={{ width:36, height:36, border:"3px solid #ecfdf5", borderTop:"3px solid #10B981", borderRadius:"50%", animation:"spin .8s linear infinite" }}/>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
@@ -165,25 +155,25 @@ export default function StaffProfilePage() {
         @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; }
         .pf {
-          --green:    #22c55e;
-          --g-dark:   #16a34a;
-          --g-bg:     #f0fdf4;
-          --g-ring:   rgba(34,197,94,.12);
-          --ink:      #111827;
-          --ink2:     #374151;
-          --ink3:     #9ca3af;
-          --ink4:     #d1d5db;
-          --border:   #e5e7eb;
-          --border2:  #f3f4f6;
-          --bg:       #f9fafb;
-          --surface:  #ffffff;
-          --f:        'Geist', system-ui, sans-serif;
+          --green:     #10B981;
+          --g-dark:    #059669;
+          --g-bg:      #ecfdf5;
+          --g-ring:    rgba(16,185,129,.12);
+          --ink:       #111827;
+          --ink2:      #374151;
+          --ink3:      #6b7280;
+          --ink4:      #9ca3af;
+          --border:    #f3f4f6;
+          --border2:   #f9fafb;
+          --bg:        #ffffff;
+          --surface:   #ffffff;
+          --f:         'Geist', system-ui, sans-serif;
           font-family: var(--f);
           height: 100%;
           display: grid;
           grid-template-columns: 300px 1fr;
           grid-template-rows: auto 1fr;
-          gap: 1.25rem;
+          gap: 1.5rem;
           padding: 0;
           align-content: start;
         }
@@ -192,35 +182,35 @@ export default function StaffProfilePage() {
         .pf-toast {
           grid-column: 1 / -1;
           display: flex; align-items: center; gap: 9px;
-          padding: 11px 16px; border-radius: 9px;
+          padding: 11px 16px; border-radius: 8px;
           font-size: 13px;
         }
-        .pf-toast.ok  { background:#f0fdf4; border:1px solid #bbf7d0; color:#15803d; }
+        .pf-toast.ok  { background:#ecfdf5; border:1px solid #d1fae5; color:#065f46; }
         .pf-toast.err { background:#fef2f2; border:1px solid #fecaca; color:#dc2626; }
 
         /* ── Left column ── */
         .pf-left {
-          display: flex; flex-direction: column; gap: 1.25rem;
+          display: flex; flex-direction: column; gap: 1.5rem;
         }
 
         /* Avatar card */
         .pf-av-card {
           background: var(--surface);
           border: 1px solid var(--border);
-          border-radius: 14px;
+          border-radius: 12px;
           padding: 2rem 1.5rem;
           display: flex; flex-direction: column; align-items: center;
           text-align: center;
-          box-shadow: 0 1px 3px rgba(0,0,0,.04);
+          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
         }
 
         .pf-av {
           position: relative;
           width: 96px; height: 96px;
-          border-radius: 14px;
+          border-radius: 12px;
           overflow: hidden;
           background: var(--g-bg);
-          border: 2px solid var(--border);
+          border: 1px solid var(--border);
           margin-bottom: 1rem;
           flex-shrink: 0;
         }
@@ -254,38 +244,38 @@ export default function StaffProfilePage() {
         .pf-av-meta {
           width: 100%;
           margin-top: 1.25rem;
-          border-top: 1px solid var(--border2);
+          border-top: 1px solid var(--border);
           padding-top: 1.125rem;
           display: flex; flex-direction: column; gap: 9px;
         }
         .pf-meta-row {
           display:flex; align-items:center; gap:8px;
-          font-size:12.5px; color:var(--ink3);
+          font-size:12.5px; color:var(--ink4);
         }
         .pf-meta-row span { color:var(--ink2); font-weight:400; }
 
         /* ── Right column ── */
         .pf-right {
-          display: flex; flex-direction: column; gap: 1.25rem;
+          display: flex; flex-direction: column; gap: 1.5rem;
         }
 
         .pf-card {
           background: var(--surface);
           border: 1px solid var(--border);
-          border-radius: 14px;
+          border-radius: 12px;
           overflow: hidden;
-          box-shadow: 0 1px 3px rgba(0,0,0,.04);
+          box-shadow: 0 1px 2px rgba(0,0,0,0.02);
         }
         .pf-card-head {
           display: flex; align-items: center; justify-content: space-between;
           padding: 1.125rem 1.5rem;
-          border-bottom: 1px solid var(--border2);
+          border-bottom: 1px solid var(--border);
         }
         .pf-card-title {
           font-size: 14px; font-weight: 600; color: var(--ink);
         }
         .pf-card-sub {
-          font-size: 12px; color: var(--ink3); margin-top: 2px;
+          font-size: 12px; color: var(--ink4); margin-top: 2px;
         }
         .pf-card-body {
           padding: 1.5rem;
@@ -299,15 +289,15 @@ export default function StaffProfilePage() {
         .pf-field {}
         .pf-field-label {
           font-size: 11.5px; font-weight: 500;
-          color: var(--ink3); margin-bottom: 6px;
+          color: var(--ink4); margin-bottom: 6px;
           display: flex; align-items: center; gap: 5px;
           letter-spacing: .01em;
         }
         .pf-field-val {
           font-size: 14px; color: var(--ink2);
           padding: 9.5px 13px;
-          background: var(--bg);
-          border: 1.5px solid var(--border2);
+          background: var(--border2);
+          border: 1px solid var(--border);
           border-radius: 8px;
           font-family: var(--f);
           min-height: 40px; display:flex; align-items:center;
@@ -316,7 +306,7 @@ export default function StaffProfilePage() {
           font-size: 14px; color: var(--ink);
           padding: 9.5px 13px;
           background: #fff;
-          border: 1.5px solid var(--border);
+          border: 1px solid var(--border);
           border-radius: 8px;
           font-family: var(--f);
           width: 100%; outline: none;
@@ -341,15 +331,13 @@ export default function StaffProfilePage() {
         }
         .pf-btn-green:hover:not(:disabled) {
           background: var(--g-dark);
-          box-shadow: 0 3px 10px rgba(34,197,94,.25);
-          transform: translateY(-1px);
         }
         .pf-btn-green:disabled { opacity:.5; cursor:not-allowed; }
         .pf-btn-outline {
           background: #fff; color: var(--ink2);
-          border: 1.5px solid var(--border) !important;
+          border: 1px solid var(--border) !important;
         }
-        .pf-btn-outline:hover { background: var(--bg); }
+        .pf-btn-outline:hover { background: var(--border2); }
       `}</style>
 
       <div className="pf">
@@ -388,18 +376,18 @@ export default function StaffProfilePage() {
 
             <div className="pf-av-meta">
               <div className="pf-meta-row">
-                <Mail size={13}/>
+                <Mail size={13} color="#9ca3af" />
                 <span>{user?.email}</span>
               </div>
               {user?.agency && (
                 <div className="pf-meta-row">
-                  <Building size={13}/>
+                  <Building size={13} color="#9ca3af" />
                   <span>{user.agency.name}</span>
                 </div>
               )}
               {user?.created_at && (
                 <div className="pf-meta-row">
-                  <Briefcase size={13}/>
+                  <Briefcase size={13} color="#9ca3af" />
                   <span>Depuis {new Date(user.created_at).toLocaleDateString("fr-FR", { year:"numeric", month:"long" })}</span>
                 </div>
               )}
