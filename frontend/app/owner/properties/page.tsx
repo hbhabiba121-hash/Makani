@@ -5,17 +5,18 @@ import { useRouter } from "next/navigation";
 import { 
   Home, MapPin, Bed, Bath, ArrowRight, Image as ImageIcon, 
   Calendar, TrendingUp, DollarSign, Percent, Users,
-  Wallet, Award, AlertCircle, XCircle, BarChart3
+  Wallet, Award, AlertCircle, XCircle, BarChart3, Plus,
+  LayoutGrid, Rows, RefreshCw, Building2, Eye
 } from "lucide-react";
 import api from "@/lib/axios";
 import { useLang } from "@/app/components/contexts/LanguageContext";
 
 const labels = {
   fr: {
-    breadcrumb:   "Accueil › Mes Propriétés",
     title:        "Mes Propriétés",
-    subtitle:     "Gérez et suivez votre portefeuille immobilier",
-    addProp:      "+ Ajouter une propriété",
+    refresh:      "Actualiser",
+    grid:         "Grille",
+    table:        "Liste",
     performance:  "Performance",
     occupancy:    "Taux d'occupation",
     avgNight:     "Prix moy./Nuit",
@@ -24,12 +25,12 @@ const labels = {
     stays:        "séjour(s)",
     lastStay:     "Dernier séjour",
     noData:       "Aucune donnée de réservation",
-    viewDetails:  "Voir les détails",
+    viewDetails:  "Voir détails",
     noImage:      "Pas d'image",
     bed:          "lit",
     beds:         "lits",
-    bath:         "salle de bain",
-    baths:        "salles de bain",
+    bath:         "sdb",
+    baths:        "sdbs",
     noPropTitle:  "Aucune propriété trouvée",
     noPropSub:    "Ajoutez votre première propriété pour commencer",
     loading:      "Chargement...",
@@ -39,12 +40,21 @@ const labels = {
       average:     "Moyen",
       needsImprov: "À améliorer",
     },
+    tableHeaders: {
+      property: "Bien",
+      location: "Emplacement",
+      type: "Type",
+      specs: "Ch./Sdb",
+      occupancy: "Occupation",
+      rent: "Loyer",
+      actions: "Actions"
+    }
   },
   ar: {
-    breadcrumb:   "الرئيسية › عقاراتي",
     title:        "عقاراتي",
-    subtitle:     "تتبع وإدارة محفظتك العقارية",
-    addProp:      "+ إضافة عقار",
+    refresh:      "تحديث",
+    grid:         "شبكة",
+    table:        "قائمة",
     performance:  "الأداء",
     occupancy:    "نسبة الإشغال",
     avgNight:     "متوسط/ليلة",
@@ -68,6 +78,15 @@ const labels = {
       average:     "متوسط",
       needsImprov: "يحتاج تحسين",
     },
+    tableHeaders: {
+      property: "العقار",
+      location: "الموقع",
+      type: "النوع",
+      specs: "غرف/حمامات",
+      occupancy: "الإشغال",
+      rent: "الإيجار",
+      actions: "إجراءات"
+    }
   },
 } as const;
 
@@ -140,8 +159,10 @@ export default function OwnerPropertiesPage() {
   const [properties, setProperties]           = useState<Property[]>([]);
   const [performanceData, setPerformanceData] = useState<{ [key: number]: PerformanceMetrics }>({});
   const [loading, setLoading]                 = useState(true);
+  const [refreshing, setRefreshing]           = useState(false);
   const [loadingMetrics, setLoadingMetrics]   = useState<{ [key: number]: boolean }>({});
   const [imageErrors, setImageErrors]         = useState<{ [key: number]: boolean }>({});
+  const [viewMode, setViewMode]               = useState<"grid" | "table">("grid");
 
   const currentYear = new Date().getFullYear();
 
@@ -164,7 +185,13 @@ export default function OwnerPropertiesPage() {
       console.error("Error:", err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const refreshData = async () => {
+    setRefreshing(true);
+    await fetchProperties();
   };
 
   const fetchPerformanceMetrics = async (propertyId: number) => {
@@ -208,9 +235,9 @@ export default function OwnerPropertiesPage() {
         return "needsImprov";
       };
       const ratingColorMap = {
-        excellent:   "#16a34a",
-        good:        "#2563eb",
-        average:     "#ca8a04",
+        excellent:   "#10b981",
+        good:        "#3b82f6",
+        average:     "#f59e0b",
         needsImprov: "#ef4444",
       };
       const ratingIconMap = {
@@ -263,347 +290,346 @@ export default function OwnerPropertiesPage() {
       return property.property_type_display;
     if (property.property_type && property.property_type !== 'other')
       return property.property_type.charAt(0).toUpperCase() + property.property_type.slice(1);
-    return 'Property';
+    return 'Propriété';
   };
 
-  const css = `
-    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
+  const getOccupancyColor = (rate: number = 0) => {
+    if (rate >= 75) return "text-[#10b981]";
+    if (rate >= 50) return "text-[#f59e0b]";
+    if (rate >= 25) return "text-[#f97316]";
+    return "text-[#ef4444]";
+  };
 
-    .op {
-      --green:      #22c55e;
-      --green-bg:   #f0fdf4;
-      --green-text: #16a34a;
-      --green-dim:  rgba(34,197,94,0.1);
-      --ink:        #111827;
-      --ink-2:      #374151;
-      --ink-3:      #6b7280;
-      --ink-4:      #9ca3af;
-      --border:     #f3f4f6;
-      --border-2:   #e5e7eb;
-      --bg:         #f9fafb;
-      --surface:    #ffffff;
-      --f: ${isRTL ? "'Cairo'" : "'Geist'"}, system-ui, sans-serif;
+  const getOccupancyBarColor = (rate: number = 0) => {
+    if (rate >= 75) return "bg-[#10b981]";
+    if (rate >= 50) return "bg-[#f59e0b]";
+    if (rate >= 25) return "bg-[#f97316]";
+    return "bg-[#ef4444]";
+  };
 
-      font-family: var(--f);
-      direction: ${isRTL ? "rtl" : "ltr"};
-      background:  var(--bg);
-      min-height:  100vh;
-      padding:     2rem;
-      color:       var(--ink);
-    }
-
-    .op-header {
-      display: flex; justify-content: space-between;
-      align-items: flex-start; margin-bottom: 2rem;
-    }
-    .op-breadcrumb { font-size: 13px; color: var(--ink-4); margin-bottom: 4px; }
-    .op-title    { font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
-    .op-subtitle { font-size: 13px; color: var(--ink-3); margin-top: 4px; }
-
-    .op-btn-primary {
-      display: flex; align-items: center; gap: 7px;
-      padding: 9px 16px; border-radius: 10px;
-      border: none; background: var(--green);
-      color: #fff; font-size: 13px; font-weight: 600;
-      cursor: pointer; font-family: var(--f);
-      box-shadow: 0 2px 8px rgba(34,197,94,0.25);
-      transition: opacity 0.12s;
-    }
-    .op-btn-primary:hover { opacity: 0.88; }
-
-    .op-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 1.25rem;
-    }
-
-    .op-card {
-      background: var(--surface);
-      border: 1px solid var(--border-2);
-      border-radius: 16px; overflow: hidden;
-      transition: box-shadow 0.2s, transform 0.2s;
-    }
-    .op-card:hover { box-shadow: 0 8px 28px rgba(0,0,0,0.08); transform: translateY(-2px); }
-
-    .op-img-wrap {
-      position: relative; height: 192px; overflow: hidden;
-      background: var(--green-bg);
-    }
-    .op-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s; }
-    .op-card:hover .op-img-wrap img { transform: scale(1.04); }
-
-    .op-placeholder {
-      width: 100%; height: 100%;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 6px;
-    }
-
-    .op-badge-type {
-      position: absolute; bottom: 10px; ${isRTL ? "right:10px" : "left:10px"};
-      background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
-      color: #fff; font-size: 11px; font-weight: 500;
-      padding: 3px 10px; border-radius: 999px;
-    }
-    .op-badge-rating {
-      position: absolute; bottom: 10px; ${isRTL ? "left:10px" : "right:10px"};
-      background: rgba(255,255,255,0.92); backdrop-filter: blur(4px);
-      font-size: 11px; font-weight: 600;
-      padding: 3px 9px; border-radius: 999px;
-      display: flex; align-items: center; gap: 4px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-    }
-
-    .op-body { padding: 1.25rem; }
-
-    .op-name {
-      font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 4px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .op-location {
-      display: flex; align-items: center; gap: 4px;
-      font-size: 13px; color: var(--ink-4); margin-bottom: 10px;
-      ${isRTL ? "flex-direction: row-reverse; justify-content: flex-end" : ""};
-    }
-    .op-specs {
-      display: flex; align-items: center; gap: 14px;
-      font-size: 12px; color: var(--ink-4); margin-bottom: 14px;
-      ${isRTL ? "flex-direction: row-reverse; justify-content: flex-end" : ""};
-    }
-    .op-spec { display: flex; align-items: center; gap: 4px; }
-
-    .op-perf {
-      background: var(--bg); border-radius: 10px;
-      padding: 10px 12px; margin-bottom: 14px;
-    }
-    .op-perf-title {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 11px; font-weight: 600; color: var(--ink-2); margin-bottom: 8px;
-      ${isRTL ? "flex-direction: row-reverse" : ""};
-    }
-    .op-perf-row {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 6px;
-    }
-    .op-perf-row:last-child { margin-bottom: 0; }
-    .op-perf-label {
-      display: flex; align-items: center; gap: 4px;
-      font-size: 12px; color: var(--ink-4);
-      ${isRTL ? "flex-direction: row-reverse" : ""};
-    }
-    .op-perf-val { font-size: 13px; font-weight: 600; color: var(--ink); }
-    .op-perf-val.green { color: var(--green-text); }
-    .op-perf-divider { border-top: 1px solid var(--border-2); padding-top: 6px; margin-top: 6px; }
-
-    .op-skel { height: 12px; border-radius: 6px; background: var(--border-2); }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-    .op-skel { animation: pulse 1.5s ease-in-out infinite; }
-
-    .op-actions { display: flex; gap: 8px; }
-    .op-btn-details {
-      flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
-      background: var(--green); color: #fff;
-      border: none; border-radius: 10px;
-      padding: 10px; font-size: 13px; font-weight: 600;
-      cursor: pointer; font-family: var(--f); transition: opacity 0.12s;
-    }
-    .op-btn-details:hover { opacity: 0.88; }
-    .op-btn-chart {
-      display: flex; align-items: center; justify-content: center;
-      border: 1px solid var(--border-2); background: var(--surface);
-      color: var(--green-text); border-radius: 10px;
-      padding: 10px 13px; cursor: pointer;
-      transition: background 0.12s, border-color 0.12s;
-    }
-    .op-btn-chart:hover { background: var(--green-bg); border-color: var(--green); }
-
-    .op-empty {
-      background: var(--surface); border: 1px solid var(--border-2);
-      border-radius: 16px; padding: 5rem 2rem; text-align: center;
-    }
-    .op-empty-title { font-size: 16px; font-weight: 600; color: var(--ink); margin: 1rem 0 6px; }
-    .op-empty-sub   { font-size: 13px; color: var(--ink-4); margin-bottom: 1.5rem; }
-
-    .op-card-skel {
-      background: var(--surface); border: 1px solid var(--border-2);
-      border-radius: 16px; overflow: hidden;
-    }
-    .op-card-skel-img  { height: 192px; background: var(--border); animation: pulse 1.5s infinite; }
-    .op-card-skel-body { padding: 1.25rem; display: flex; flex-direction: column; gap: 10px; }
-  `;
+  if (loading && properties.length === 0) {
+    return (
+      <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#22c55e] mx-auto mb-3" />
+          <p className="text-[#6b7280] text-sm">{tx.loading}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
-      <style>{css}</style>
-      <div className="op">
-
-        {/* Header */}
-        <div className="op-header">
-          <div>
-            <div className="op-breadcrumb">{tx.breadcrumb}</div>
-            <h1 className="op-title">{tx.title}</h1>
-            <p className="op-subtitle">{tx.subtitle}</p>
-          </div>
-          <button className="op-btn-primary" onClick={() => router.push("/owner/properties/add")}>
-            {tx.addProp}
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="op-grid">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="op-card-skel">
-                <div className="op-card-skel-img" />
-                <div className="op-card-skel-body">
-                  <div className="op-skel" style={{ width: "70%" }} />
-                  <div className="op-skel" style={{ width: "45%" }} />
-                  <div className="op-skel" style={{ width: "100%", height: 80 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : properties.length === 0 ? (
-          <div className="op-empty">
-            <Home size={56} color="var(--border-2)" style={{ margin: "0 auto" }} />
-            <div className="op-empty-title">{tx.noPropTitle}</div>
-            <div className="op-empty-sub">{tx.noPropSub}</div>
-            <button className="op-btn-primary" style={{ margin: "0 auto" }}
-              onClick={() => router.push("/owner/properties/add")}>
-              {tx.addProp}
+    <div className="min-h-screen bg-[#f9fafb]" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-6 max-w-[1400px] mx-auto">
+        {/* Header with Title and Actions */}
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-[#111827] tracking-tight">{tx.title}</h1>
+          <div className="flex items-center gap-2">
+            {/* View Toggle Buttons */}
+            <div className="flex items-center gap-1 bg-white border border-[#e5e7eb] rounded-lg p-1">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  viewMode === "grid" 
+                    ? "bg-[#22c55e] text-white" 
+                    : "text-[#64748b] hover:bg-[#f8fafc]"
+                }`}
+              >
+                <LayoutGrid size={14} />
+                {tx.grid}
+              </button>
+              <button
+                onClick={() => setViewMode("table")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  viewMode === "table" 
+                    ? "bg-[#22c55e] text-white" 
+                    : "text-[#64748b] hover:bg-[#f8fafc]"
+                }`}
+              >
+                <Rows size={14} />
+                {tx.table}
+              </button>
+            </div>
+            
+            {/* Refresh Button */}
+            <button
+              onClick={refreshData}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 bg-white border border-[#e5e7eb] text-[#374151] px-3 py-2 rounded-lg text-xs font-semibold hover:bg-[#f8fafc] transition-all disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+              {tx.refresh}
             </button>
           </div>
-        ) : (
-          <div className="op-grid">
-            {properties.map((p) => {
-              const mainImageUrl    = getMainImageUrl(p);
-              const hasImageError   = imageErrors[p.id];
-              const showPlaceholder = !mainImageUrl || hasImageError;
-              const metrics         = performanceData[p.id];
-              const isLoadingM      = loadingMetrics[p.id];
-              const typeDisplay     = getPropertyTypeDisplay(p);
+        </div>
 
-              const occColor = metrics
-                ? metrics.occupancyRate >= 50 ? "#16a34a"
-                  : metrics.occupancyRate >= 30 ? "#ca8a04"
-                  : "#ef4444"
-                : "var(--ink)";
+        {/* Properties Grid View */}
+        {viewMode === "grid" && (
+          properties.length === 0 ? (
+            <div className="bg-white rounded-xl border border-[#e5e7eb] p-12 text-center">
+              <Home size={56} className="text-[#d1d5db] mx-auto mb-4" />
+              <div className="text-base font-semibold text-[#111827] mb-1">{tx.noPropTitle}</div>
+              <div className="text-sm text-[#6b7280] mb-4">{tx.noPropSub}</div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              {properties.map((p) => {
+                const mainImageUrl    = getMainImageUrl(p);
+                const hasImageError   = imageErrors[p.id];
+                const showPlaceholder = !mainImageUrl || hasImageError;
+                const metrics         = performanceData[p.id];
+                const isLoadingM      = loadingMetrics[p.id];
+                const typeDisplay     = getPropertyTypeDisplay(p);
+                const occupancyRate   = metrics?.occupancyRate || 0;
 
-              const ratingText = metrics
-                ? tx.ratings[metrics.rating.text as keyof typeof tx.ratings]
-                : "";
-
-              return (
-                <div key={p.id} className="op-card">
-                  {/* Image */}
-                  <div className="op-img-wrap">
-                    {!showPlaceholder ? (
-                      <img src={mainImageUrl!} alt={p.name}
-                        onError={() => handleImageError(p.id)} />
-                    ) : (
-                      <div className="op-placeholder">
-                        <ImageIcon size={40} color="rgba(34,197,94,0.3)" />
-                        <span style={{ fontSize: 11, color: "rgba(34,197,94,0.5)" }}>{tx.noImage}</span>
-                      </div>
-                    )}
-                    <span className="op-badge-type">{typeDisplay}</span>
-                    {metrics && !isLoadingM && (
-                      <div className="op-badge-rating" style={{ color: metrics.rating.color }}>
-                        <metrics.rating.icon size={11} />
-                        {ratingText}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="op-body">
-                    <div className="op-name">{p.name}</div>
-                    <div className="op-location">
-                      <MapPin size={12} />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {p.location}
-                      </span>
-                    </div>
-                    <div className="op-specs">
-                      <span className="op-spec">
-                        <Bed size={13} /> {p.bedrooms} {p.bedrooms === 1 ? tx.bed : tx.beds}
-                      </span>
-                      <span className="op-spec">
-                        <Bath size={13} /> {p.bathrooms} {p.bathrooms === 1 ? tx.bath : tx.baths}
-                      </span>
-                      {p.area_sqm && <span className="op-spec"><Home size={13} /> {p.area_sqm} m²</span>}
-                    </div>
-
-                    <div className="op-perf">
-                      <div className="op-perf-title">
-                        <BarChart3 size={13} color="var(--green-text)" />
-                        {tx.performance}
-                      </div>
-
-                      {isLoadingM ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                          <div className="op-skel" />
-                          <div className="op-skel" style={{ width: "65%" }} />
-                        </div>
-                      ) : metrics ? (
-                        <>
-                          <div className="op-perf-row">
-                            <span className="op-perf-label"><Percent size={12} />{tx.occupancy}</span>
-                            <span className="op-perf-val" style={{ color: occColor }}>
-                              {toNum(metrics.occupancyRate).toFixed(0)}%
-                            </span>
-                          </div>
-                          <div className="op-perf-row">
-                            <span className="op-perf-label"><DollarSign size={12} />{tx.avgNight}</span>
-                            <span className="op-perf-val">
-                              {metrics.totalNights > 0
-                                ? Math.round(metrics.avgPricePerNight).toLocaleString()
-                                : "—"} MAD
-                            </span>
-                          </div>
-                          <div className="op-perf-row">
-                            <span className="op-perf-label"><Wallet size={12} />{tx.netProfit}</span>
-                            <span className="op-perf-val green">
-                              {Math.round(toNum(metrics.netProfit)).toLocaleString()} MAD
-                            </span>
-                          </div>
-                          <div className="op-perf-row">
-                            <span className="op-perf-label"><Users size={12} />{tx.bookings}</span>
-                            <span className="op-perf-val">{metrics.totalBookings} {tx.stays}</span>
-                          </div>
-                          {metrics.lastBookingDate && (
-                            <div className="op-perf-row op-perf-divider">
-                              <span className="op-perf-label" style={{ fontSize: 11 }}>
-                                <Calendar size={10} />{tx.lastStay}
-                              </span>
-                              <span style={{ fontSize: 11, color: "var(--ink-4)" }}>
-                                {metrics.lastBookingDate}
-                              </span>
-                            </div>
-                          )}
-                        </>
+                return (
+                  <div 
+                    key={p.id} 
+                    className="bg-white rounded-xl border border-[#e5e7eb] overflow-hidden hover:shadow-md transition-all duration-200 group"
+                  >
+                    {/* Image Section */}
+                    <div className="relative h-48 overflow-hidden bg-[#f0fdf4]">
+                      {!showPlaceholder ? (
+                        <img 
+                          src={mainImageUrl!} 
+                          alt={p.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={() => handleImageError(p.id)} 
+                        />
                       ) : (
-                        <div style={{ textAlign: "center", padding: "8px 0", fontSize: 12, color: "var(--ink-4)" }}>
-                          {tx.noData}
+                        <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                          <ImageIcon size={40} className="text-[#22c55e]/30" />
+                          <span className="text-xs text-[#22c55e]/50">{tx.noImage}</span>
                         </div>
                       )}
+                      
+                      {/* Property Type Badge */}
+                      <span className="absolute bottom-3 left-3 bg-black/45 backdrop-blur-sm text-white text-[11px] font-medium px-2.5 py-1 rounded-full">
+                        {typeDisplay}
+                      </span>
                     </div>
 
-                    <div className="op-actions">
-                      <button className="op-btn-details"
-                        onClick={() => router.push(`/owner/properties/${p.id}`)}>
-                        {tx.viewDetails} <ArrowRight size={14} />
-                      </button>
-                      <button className="op-btn-chart"
-                        onClick={() => router.push(`/owner/properties/${p.id}/performance`)}>
-                        <BarChart3 size={15} />
-                      </button>
+                    {/* Content Section */}
+                    <div className="p-4">
+                      <h3 className="font-bold text-[#111827] text-base truncate">{p.name}</h3>
+                      
+                      <div className="flex items-center gap-1 text-[#9ca3af] text-xs mt-1 mb-3">
+                        <MapPin size={12} />
+                        <span className="truncate">{p.location}</span>
+                      </div>
+
+                      {/* Specifications */}
+                      <div className="flex items-center gap-3 text-[#6b7280] text-xs mb-4">
+                        <span className="flex items-center gap-1">
+                          <Bed size={12} /> {p.bedrooms} {p.bedrooms === 1 ? tx.bed : tx.beds}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Bath size={12} /> {p.bathrooms} {p.bathrooms === 1 ? tx.bath : tx.baths}
+                        </span>
+                        {p.area_sqm && (
+                          <span className="flex items-center gap-1">
+                            <Home size={12} /> {p.area_sqm} m²
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Performance Section */}
+                      <div className="bg-[#f9fafb] rounded-lg p-3 mb-4">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <BarChart3 size={12} className="text-[#22c55e]" />
+                          <span className="text-[11px] font-semibold text-[#374151]">{tx.performance}</span>
+                        </div>
+
+                        {isLoadingM ? (
+                          <div className="space-y-2">
+                            <div className="h-2 bg-[#e5e7eb] rounded animate-pulse" />
+                            <div className="h-2 bg-[#e5e7eb] rounded w-2/3 animate-pulse" />
+                          </div>
+                        ) : metrics ? (
+                          <>
+                            <div className="mb-2">
+                              <div className="flex justify-between text-xs mb-1">
+                                <span className="flex items-center gap-1 text-[#6b7280]">
+                                  <Percent size={10} /> {tx.occupancy}
+                                </span>
+                                <span className={`font-semibold ${getOccupancyColor(occupancyRate)}`}>
+                                  {Math.round(occupancyRate)}%
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-[#e5e7eb] rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-500 ${getOccupancyBarColor(occupancyRate)}`}
+                                  style={{ width: `${Math.min(100, occupancyRate)}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="flex items-center gap-1 text-[#6b7280] mb-0.5">
+                                  <DollarSign size={10} /> {tx.avgNight}
+                                </span>
+                                <span className="font-semibold text-[#111827]">
+                                  {metrics.totalNights > 0 ? Math.round(metrics.avgPricePerNight).toLocaleString() : "—"} MAD
+                                </span>
+                              </div>
+                              <div>
+                                <span className="flex items-center gap-1 text-[#6b7280] mb-0.5">
+                                  <Wallet size={10} /> {tx.netProfit}
+                                </span>
+                                <span className="font-semibold text-[#16a34a]">
+                                  {Math.round(metrics.netProfit).toLocaleString()} MAD
+                                </span>
+                              </div>
+                              <div>
+                                <span className="flex items-center gap-1 text-[#6b7280] mb-0.5">
+                                  <Users size={10} /> {tx.bookings}
+                                </span>
+                                <span className="font-semibold text-[#111827]">
+                                  {metrics.totalBookings} {tx.stays}
+                                </span>
+                              </div>
+                              {metrics.lastBookingDate && (
+                                <div>
+                                  <span className="flex items-center gap-1 text-[#6b7280] mb-0.5">
+                                    <Calendar size={10} /> {tx.lastStay}
+                                  </span>
+                                  <span className="text-[#6b7280] text-[10px]">
+                                    {metrics.lastBookingDate}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-center py-3 text-xs text-[#9ca3af]">
+                            {tx.noData}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => router.push(`/owner/properties/${p.id}`)}
+                          className="flex-1 flex items-center justify-center gap-2 bg-[#22c55e] text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-[#16a34a] transition-all"
+                        >
+                          {tx.viewDetails} <ArrowRight size={14} />
+                        </button>
+                        <button 
+                          onClick={() => router.push(`/owner/properties/${p.id}/performance`)}
+                          className="flex items-center justify-center gap-2 border border-[#e5e7eb] bg-white text-[#16a34a] px-3 py-2 rounded-lg hover:bg-[#f0fdf4] transition-all"
+                        >
+                          <BarChart3 size={15} />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {/* Properties Table View */}
+        {viewMode === "table" && (
+          properties.length === 0 ? (
+            <div className="bg-white rounded-xl border border-[#e5e7eb] p-12 text-center">
+              <Home size={56} className="text-[#d1d5db] mx-auto mb-4" />
+              <div className="text-base font-semibold text-[#111827] mb-1">{tx.noPropTitle}</div>
+              <div className="text-sm text-[#6b7280] mb-4">{tx.noPropSub}</div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-[#e5e7eb] overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#e5e7eb] bg-[#f9fafb]">
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6b7280] uppercase tracking-wider">{tx.tableHeaders.property}</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6b7280] uppercase tracking-wider hidden md:table-cell">{tx.tableHeaders.location}</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6b7280] uppercase tracking-wider hidden sm:table-cell">{tx.tableHeaders.type}</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6b7280] uppercase tracking-wider hidden lg:table-cell">{tx.tableHeaders.specs}</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6b7280] uppercase tracking-wider">{tx.tableHeaders.occupancy}</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#6b7280] uppercase tracking-wider">{tx.tableHeaders.rent}</th>
+                      <th className="text-right px-4 py-3 text-[11px] font-semibold text-[#6b7280] uppercase tracking-wider">{tx.tableHeaders.actions}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f1f5f9]">
+                    {properties.map((p) => {
+                      const metrics = performanceData[p.id];
+                      const occupancyRate = metrics?.occupancyRate || 0;
+                      const mainImageUrl = getMainImageUrl(p);
+                      
+                      return (
+                        <tr key={p.id} className="hover:bg-[#f8fafc] transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-[#f0fdf4] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                {mainImageUrl && !imageErrors[p.id] ? (
+                                  <img 
+                                    src={mainImageUrl} 
+                                    alt={p.name} 
+                                    className="w-8 h-8 object-cover"
+                                    onError={() => handleImageError(p.id)}
+                                  />
+                                ) : (
+                                  <Building2 size={14} className="text-[#94a3b8]" />
+                                )}
+                              </div>
+                              <span className="font-semibold text-[#111827] text-[13px] truncate max-w-[140px]">{p.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 hidden md:table-cell">
+                            <div className="flex items-center gap-1 text-[12px] text-[#6b7280]">
+                              <MapPin size={12} /><span className="truncate max-w-[100px]">{p.location}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 hidden sm:table-cell">
+                            <span className="text-[11px] bg-[#f1f5f9] px-2 py-0.5 rounded text-[#64748b] font-medium">{getPropertyTypeDisplay(p)}</span>
+                          </td>
+                          <td className="px-4 py-3 hidden lg:table-cell">
+                            <div className="flex items-center gap-1.5 text-[12px] text-[#6b7280]">
+                              <Bed size={12} /> {p.bedrooms}
+                              <Bath size={12} /> {p.bathrooms}
+                            </div>
+                           </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-14 h-1.5 bg-[#f1f5f9] rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${getOccupancyBarColor(occupancyRate)}`} style={{ width: `${Math.min(100, occupancyRate)}%` }} />
+                              </div>
+                              <span className={`text-[12px] font-semibold ${getOccupancyColor(occupancyRate)}`}>{Math.round(occupancyRate)}%</span>
+                            </div>
+                           </td>
+                          <td className="px-4 py-3">
+                            <span className="text-[13px] font-bold text-[#111827]">{Number(p.monthly_rent).toLocaleString()} MAD</span>
+                           </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button 
+                                onClick={() => router.push(`/owner/properties/${p.id}`)}
+                                className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[#f0fdf4] text-[#6b7280] hover:text-[#22c55e] transition-colors"
+                              >
+                                <Eye size={13} />
+                              </button>
+                              <button 
+                                onClick={() => router.push(`/owner/properties/${p.id}/performance`)}
+                                className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-[#f0fdf4] text-[#6b7280] hover:text-[#22c55e] transition-colors"
+                              >
+                                <BarChart3 size={13} />
+                              </button>
+                            </div>
+                           </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
         )}
       </div>
-    </>
+    </div>
   );
 }

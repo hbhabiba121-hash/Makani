@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  CreditCard,
 } from "lucide-react";
 import Navbar from "@/app/components/Navbar";
 import { LanguageProvider, useLang } from "@/app/components/contexts/LanguageContext";
@@ -26,6 +27,7 @@ const labels = {
     dashboard: "Tableau de bord",
     properties: "Mes Propriétés",
     earnings: "Revenus",
+    payments: "Paiements",
     reports: "Rapports",
     settings: "Paramètres",
     logout: "Déconnexion",
@@ -39,6 +41,7 @@ const labels = {
     dashboard: "لوحة التحكم",
     properties: "عقاراتي",
     earnings: "الإيرادات",
+    payments: "المدفوعات",
     reports: "التقارير",
     settings: "الإعدادات",
     logout: "تسجيل الخروج",
@@ -76,6 +79,7 @@ function OwnerLayoutInner({ children }: { children: React.ReactNode }) {
     { key: "dashboard", icon: LayoutDashboard, href: "/owner", label: tx.dashboard },
     { key: "properties", icon: Home, href: "/owner/properties", label: tx.properties },
     { key: "earnings", icon: DollarSign, href: "/owner/earnings", label: tx.earnings },
+    { key: "payments", icon: CreditCard, href: "/owner/payments", label: tx.payments },
     { key: "reports", icon: FileText, href: "/owner/reports", label: tx.reports },
   ] as const;
 

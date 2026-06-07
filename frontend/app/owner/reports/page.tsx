@@ -2,60 +2,76 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, FileText, Calendar, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { 
+  Download, FileText, Calendar, Filter, ChevronDown, ChevronUp, 
+  Plus, Printer, Eye, TrendingUp, DollarSign, Wallet, Building2,
+  X, BarChart3, Clock, Award, Target, Zap, MessageCircle
+} from "lucide-react";
 import api from "@/lib/axios";
 import { useLang } from "@/app/components/contexts/LanguageContext";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const i18n = {
   fr: {
-    breadcrumb:    "Accueil › Rapports",
-    title:         "Bibliothèque de rapports",
-    subtitle:      "Rapports financiers générés par votre agence",
-    filtersLabel:  "Filtres :",
-    all:           "Tous",
-    monthly:       "Mensuel",
-    yearly:        "Annuel",
-    allYears:      "Toutes les années",
-    found:         (n: number) => `${n} rapport${n !== 1 ? "s" : ""} trouvé${n !== 1 ? "s" : ""}`,
-    generated:     "Généré le :",
+    availableReports: "Rapports disponibles",
+    latestReport: "Dernier rapport",
+    totalRevenueYear: "Revenus annuels",
+    reportsList: "Liste des rapports",
+    report: "Rapport",
+    period: "Période",
+    property: "Propriété",
+    generatedOn: "Généré le",
+    action: "Action",
     monthlyReport: "Rapport mensuel",
-    yearlyReport:  "Rapport annuel",
-    netProfit:     "Bénéfice net",
-    download:      "Télécharger",
-    totalRevenue:  "Revenus totaux",
-    commission:    "Commission",
-    expenses:      "Dépenses",
-    genByAgency:   "Généré par l'agence le",
-    noReports:     "Aucun rapport disponible",
-    noReportsSub:  "Les rapports apparaîtront ici une fois générés par votre agence",
-    totalAvail:    (n: number) => `Total des rapports disponibles : `,
-    loading:       "Chargement...",
+    yearlyReport: "Rapport annuel",
+    download: "Télécharger",
+    contactAgency: "Contacter l'agence",
+    allProperties: "Toutes les propriétés",
+    allPeriods: "Toutes les périodes",
+    filters: "Filtres",
+    reset: "Réinitialiser",
+    loading: "Chargement...",
+    noReports: "Aucun rapport disponible",
+    noReportsSub: "Les rapports seront disponibles après publication par votre agence",
+    reportsCount: (n: number) => `${n} rapport${n !== 1 ? "s" : ""} disponible${n !== 1 ? "s" : ""}`,
+    contactMessage: "Vous avez une question sur vos rapports ? Notre équipe est là pour vous aider.",
+    contactSupport: "Contacter le support",
+    months: ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"],
   },
   ar: {
-    breadcrumb:    "الرئيسية › التقارير",
-    title:         "مكتبة التقارير",
-    subtitle:      "التقارير المالية التي أنشأتها وكالتك",
-    filtersLabel:  "التصفية:",
-    all:           "الكل",
-    monthly:       "شهري",
-    yearly:        "سنوي",
-    allYears:      "كل السنوات",
-    found:         (n: number) => `${n} تقرير`,
-    generated:     "تم التوليد:",
+    availableReports: "التقارير المتاحة",
+    latestReport: "آخر تقرير",
+    totalRevenueYear: "الإيرادات السنوية",
+    reportsList: "قائمة التقارير",
+    report: "التقرير",
+    period: "الفترة",
+    property: "العقار",
+    generatedOn: "تاريخ التوليد",
+    action: "إجراء",
     monthlyReport: "تقرير شهري",
-    yearlyReport:  "تقرير سنوي",
-    netProfit:     "صافي الربح",
-    download:      "تحميل",
-    totalRevenue:  "إجمالي الإيرادات",
-    commission:    "العمولة",
-    expenses:      "المصروفات",
-    genByAgency:   "تم التوليد بواسطة الوكالة في",
-    noReports:     "لا توجد تقارير متاحة",
-    noReportsSub:  "ستظهر التقارير هنا بعد توليدها من طرف الوكالة",
-    totalAvail:    (n: number) => `إجمالي التقارير المتاحة: `,
-    loading:       "جارٍ التحميل...",
+    yearlyReport: "تقرير سنوي",
+    download: "تحميل",
+    contactAgency: "اتصل بالوكالة",
+    allProperties: "جميع العقارات",
+    allPeriods: "كل الفترات",
+    filters: "تصفية",
+    reset: "إعادة تعيين",
+    loading: "جارٍ التحميل...",
+    noReports: "لا توجد تقارير متاحة",
+    noReportsSub: "ستظهر التقارير هنا بعد نشرها من قبل وكالتك",
+    reportsCount: (n: number) => `${n} تقرير`,
+    contactMessage: "هل لديك سؤال حول تقاريرك؟ فريقنا هنا لمساعدتك.",
+    contactSupport: "اتصل بالدعم",
+    months: ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"],
   },
 } as const;
+
+interface Property {
+  id: number;
+  name: string;
+  location: string;
+}
 
 interface Report {
   id: number;
@@ -73,22 +89,50 @@ interface Report {
   property_count: number;
   created_at: string;
   details: any;
+  bookings_count?: number;
+  occupancy_rate?: number;
 }
 
+const GREEN = "#22c55e";
+const GREEN_DARK = "#16a34a";
+const GREEN_BG = "#f0fdf4";
+const BLUE = "#3b82f6";
+const RED = "#ef4444";
+const ORANGE = "#f59e0b";
+const PURPLE = "#8b5cf6";
+
+const formatCurrency = (amount: number, lang: "fr" | "ar"): string => {
+  return amount.toLocaleString(lang === "fr" ? "fr-FR" : "ar-MA") + " MAD";
+};
+
+const formatDate = (dateStr: string, lang: "fr" | "ar"): string => {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(lang === "fr" ? "fr-FR" : "ar-MA", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
 export default function OwnerReportsPage() {
-
   const router = useRouter();
-
   const { lang } = useLang();
-  const tx    = i18n[lang];
+  const tx = i18n[lang];
   const isRTL = lang === "ar";
 
-  const [reports, setReports]               = useState<Report[]>([]);
-  const [loading, setLoading]               = useState(true);
-  const [downloading, setDownloading]       = useState<number | null>(null);
-  const [filterType, setFilterType]         = useState<"all" | "monthly" | "yearly">("all");
-  const [selectedYear, setSelectedYear]     = useState<number | "all">("all");
-  const [expandedReport, setExpandedReport] = useState<number | null>(null);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<number | null>(null);
+  
+  // Filters
+  const [filterYear, setFilterYear] = useState<number | "all">("all");
+  const [filterProperty, setFilterProperty] = useState<number | "all">("all");
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -96,20 +140,47 @@ export default function OwnerReportsPage() {
   }, [router]);
 
   useEffect(() => {
-    fetchReports();
+    fetchData();
   }, []);
 
-  const fetchReports = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await api.get("/api/reports/reports/?report_scope=owner");
-      const reportsData = response.data.reports || [];
+      // Fetch properties
+      const propsRes = await api.get("/api/properties/");
+      const propsData = Array.isArray(propsRes.data) ? propsRes.data : propsRes.data.results ?? [];
+      setProperties(propsData);
+      
+      // Fetch reports
+      const reportsRes = await api.get("/api/reports/reports/?report_scope=owner");
+      const reportsData = reportsRes.data.reports || [];
       reportsData.sort((a: Report, b: Report) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
-      setReports(reportsData);
+      
+      // Enhance reports with additional data
+      const enhancedReports = await Promise.all(reportsData.map(async (report: Report) => {
+        if (report.report_type === "monthly" && report.month && report.year && report.property_id) {
+          try {
+            const finRes = await api.get(`/api/financials/monthly-summary/${report.property_id}/?year=${report.year}`);
+            const monthData = finRes.data.find((item: any) => item.month === report.month);
+            if (monthData) {
+              return {
+                ...report,
+                bookings_count: monthData.bookings_count || 0,
+                occupancy_rate: monthData.occupancy_rate || 0,
+              };
+            }
+          } catch (err) {
+            console.warn("Error fetching additional data:", err);
+          }
+        }
+        return report;
+      }));
+      
+      setReports(enhancedReports);
     } catch (err) {
-      console.error("Error fetching reports:", err);
+      console.error("Error fetching data:", err);
       setReports([]);
     } finally {
       setLoading(false);
@@ -127,6 +198,7 @@ export default function OwnerReportsPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Download failed:", err);
       alert("Failed to download report");
@@ -135,204 +207,389 @@ export default function OwnerReportsPage() {
     }
   };
 
+  const contactAgency = () => {
+    window.open(`https://wa.me/212600000000?text=Bonjour%2C%20j%27ai%20une%20question%20concernant%20mes%20rapports%20financiers`, "_blank");
+  };
+
   const filteredReports = reports.filter(report => {
-    if (filterType !== "all" && report.report_type !== filterType) return false;
-    if (selectedYear !== "all" && report.year !== selectedYear) return false;
+    if (filterYear !== "all" && report.year !== filterYear) return false;
+    if (filterProperty !== "all" && report.property_id !== filterProperty) return false;
     return true;
   });
 
   const availableYears = [...new Set(reports.map(r => r.year))].sort((a, b) => b - a);
+  
+  const latestReport = reports[0];
+  const availableReportsCount = reports.length;
+  
+  // Calculate total revenue for current year
+  const currentYear = new Date().getFullYear();
+  const totalRevenueThisYear = reports
+    .filter(r => r.year === currentYear)
+    .reduce((sum, r) => sum + r.total_revenue, 0);
+
+  const getMonthName = (month: number) => {
+    return tx.months[month - 1] || "";
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: "2rem", background: "#f9fafb", minHeight: "100vh" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+          {[...Array(3)].map((_, i) => (
+            <div key={i} style={{
+              height: 120, borderRadius: 16, background: "linear-gradient(90deg,#f3f4f6 25%,#e9eaeb 50%,#f3f4f6 75%)",
+              backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite"
+            }} />
+          ))}
+        </div>
+        <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="p-8 bg-[#f9fafb] min-h-screen"
-      style={{
-        direction: isRTL ? "rtl" : "ltr",
-        fontFamily: isRTL ? "'Cairo', system-ui, sans-serif" : "'Geist', system-ui, sans-serif",
-      }}
-    >
-
-      <div className={`flex justify-between items-start mb-8 flex-wrap gap-4 ${isRTL ? "flex-row-reverse" : ""}`}>
-        <div>
-          <p className="text-sm text-gray-400 mb-1">{tx.breadcrumb}</p>
-          <h1 className="text-2xl font-bold text-gray-900">{tx.title}</h1>
-          <p className="text-sm text-gray-500 mt-1">{tx.subtitle}</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-6">
-        <div className={`flex flex-wrap gap-4 items-center ${isRTL ? "flex-row-reverse" : ""}`}>
-          <div className={`flex items-center gap-2 ${isRTL ? "flex-row-reverse" : ""}`}>
-            <Filter size={16} className="text-gray-400" />
-            <span className="text-sm font-medium text-gray-700">{tx.filtersLabel}</span>
-          </div>
-
-          <div className="flex gap-2">
-            {(["all", "monthly", "yearly"] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilterType(f)}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
-                  filterType === f
-                    ? "bg-[#22c55e] text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {f === "all" ? tx.all : f === "monthly" ? tx.monthly : tx.yearly}
-              </button>
-            ))}
-          </div>
-
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(e.target.value === "all" ? "all" : Number(e.target.value))}
-            className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-[#22c55e]"
+    <div style={{
+      fontFamily: isRTL ? "'Cairo', system-ui" : "'Geist', system-ui",
+      direction: isRTL ? "rtl" : "ltr",
+      background: "#f9fafb",
+      minHeight: "100vh",
+      padding: "1.75rem 2rem"
+    }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+        {/* Header with Contact Button only - no title/subtitle */}
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
+          <button 
+            onClick={contactAgency}
+            style={{
+              padding: "10px 20px",
+              borderRadius: 10,
+              border: "none",
+              background: GREEN,
+              color: "#fff",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              fontWeight: 500,
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = GREEN_DARK}
+            onMouseLeave={e => e.currentTarget.style.background = GREEN}
           >
-            <option value="all">{tx.allYears}</option>
-            {availableYears.map(year => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-
-          {reports.length > 0 && (
-            <span className={`text-xs text-gray-400 ${isRTL ? "mr-auto" : "ml-auto"}`}>
-              {tx.found(filteredReports.length)}
-            </span>
-          )}
+            <MessageCircle size={16} />
+            {tx.contactAgency}
+          </button>
         </div>
-      </div>
 
-      <div className="space-y-4">
-        {loading ? (
-          [...Array(3)].map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 animate-pulse">
-              <div className={`flex justify-between items-start ${isRTL ? "flex-row-reverse" : ""}`}>
-                <div className={`flex items-start gap-4 ${isRTL ? "flex-row-reverse" : ""}`}>
-                  <div className="w-12 h-12 bg-gray-100 rounded-xl" />
-                  <div>
-                    <div className="h-5 bg-gray-100 rounded w-48 mb-2" />
-                    <div className="h-3 bg-gray-100 rounded w-32" />
-                  </div>
-                </div>
-                <div className="w-24 h-8 bg-gray-100 rounded-lg" />
+        {/* KPI Cards */}
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "repeat(3, 1fr)", 
+          gap: "1.25rem", 
+          marginBottom: "1.75rem" 
+        }}>
+          {/* Available Reports Card */}
+          <div style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            padding: "1.25rem",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <FileText size={20} color={GREEN} />
+              </div>
+              <div>
+                <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 2 }}>{tx.availableReports}</p>
+                <p style={{ fontSize: 28, fontWeight: 700, color: "#111827" }}>{availableReportsCount}</p>
               </div>
             </div>
-          ))
-        ) : filteredReports.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
-            <FileText size={48} className="mx-auto mb-3 text-gray-200" />
-            <p className="text-gray-500 font-medium">{tx.noReports}</p>
-            <p className="text-sm text-gray-400 mt-1">{tx.noReportsSub}</p>
+            <p style={{ fontSize: 11, color: "#d1d5db" }}>{tx.reportsCount(availableReportsCount)}</p>
           </div>
-        ) : (
-          filteredReports.map((report) => {
-            const isExpanded = expandedReport === report.id;
-            return (
-              <div
-                key={report.id}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all"
+
+          {/* Latest Report Card */}
+          <div style={{
+            background: "linear-gradient(135deg, #f0fdf4, #ffffff)",
+            border: `1px solid ${GREEN}`,
+            borderRadius: 16,
+            padding: "1.25rem",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: GREEN_BG, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Clock size={20} color={GREEN} />
+              </div>
+              <div>
+                <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 2 }}>{tx.latestReport}</p>
+                <p style={{ fontSize: 18, fontWeight: 700, color: "#111827" }}>
+                  {latestReport ? `${getMonthName(latestReport.month || 0)} ${latestReport.year}` : "—"}
+                </p>
+              </div>
+            </div>
+            {latestReport && (
+              <p style={{ fontSize: 11, color: GREEN }}>
+                {formatCurrency(latestReport.net_profit, lang)}
+              </p>
+            )}
+          </div>
+
+          {/* Total Revenue Card */}
+          <div style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            padding: "1.25rem",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#eff6ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <DollarSign size={20} color={BLUE} />
+              </div>
+              <div>
+                <p style={{ fontSize: 12, color: "#9ca3af", marginBottom: 2 }}>{tx.totalRevenueYear}</p>
+                <p style={{ fontSize: 18, fontWeight: 700, color: BLUE }}>
+                  {formatCurrency(totalRevenueThisYear, lang)}
+                </p>
+              </div>
+            </div>
+            <p style={{ fontSize: 11, color: "#d1d5db" }}>{currentYear}</p>
+          </div>
+        </div>
+
+        {/* Filters Bar */}
+        <div style={{ 
+          background: "#fff", 
+          border: "1px solid #e5e7eb", 
+          borderRadius: 12, 
+          padding: "1rem 1.25rem", 
+          marginBottom: "1.5rem",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Filter size={14} color="#9ca3af" />
+            <span style={{ fontSize: 12, fontWeight: 500, color: "#6b7280" }}>{tx.filters}</span>
+          </div>
+          
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            <select
+              value={filterYear}
+              onChange={(e) => setFilterYear(e.target.value === "all" ? "all" : Number(e.target.value))}
+              style={{
+                padding: "6px 12px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 8,
+                fontSize: 12,
+                background: "#fff"
+              }}
+            >
+              <option value="all">{tx.allPeriods}</option>
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+            
+            <select
+              value={filterProperty}
+              onChange={(e) => setFilterProperty(e.target.value === "all" ? "all" : Number(e.target.value))}
+              style={{
+                padding: "6px 12px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 8,
+                fontSize: 12,
+                background: "#fff"
+              }}
+            >
+              <option value="all">{tx.allProperties}</option>
+              {properties.map(prop => (
+                <option key={prop.id} value={prop.id}>{prop.name}</option>
+              ))}
+            </select>
+            
+            {(filterYear !== "all" || filterProperty !== "all") && (
+              <button
+                onClick={() => { setFilterYear("all"); setFilterProperty("all"); }}
+                style={{
+                  padding: "6px 12px",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 8,
+                  fontSize: 12,
+                  background: "#f9fafb",
+                  cursor: "pointer"
+                }}
               >
-                <div className="p-5">
-                  <div className={`flex justify-between items-start ${isRTL ? "flex-row-reverse" : ""}`}>
-                    <div className={`flex items-start gap-4 ${isRTL ? "flex-row-reverse" : ""}`}>
-                      <div className="w-12 h-12 rounded-xl bg-[#f0fdf4] flex-shrink-0"
-                        style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <FileText size={22} className="text-[#22c55e]" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-gray-900 text-lg">{report.name}</h3>
-                        <div className={`flex items-center gap-3 mt-1 flex-wrap ${isRTL ? "flex-row-reverse" : ""}`}>
-                          <span className={`text-xs text-gray-400 flex items-center gap-1 ${isRTL ? "flex-row-reverse" : ""}`}>
-                            <Calendar size={12} />
-                            {tx.generated} {report.created_at}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            report.report_type === "monthly"
-                              ? "bg-blue-50 text-blue-600"
-                              : "bg-[#f0fdf4] text-[#22c55e]"
-                          }`}>
+                {tx.reset}
+              </button>
+            )}
+          </div>
+          
+          <span style={{ fontSize: 11, color: "#9ca3af" }}>
+            {tx.reportsCount(filteredReports.length)}
+          </span>
+        </div>
+
+        {/* Reports List */}
+        <div style={{ 
+          background: "#fff", 
+          border: "1px solid #e5e7eb", 
+          borderRadius: 20, 
+          overflow: "hidden",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+          marginBottom: "1.75rem"
+        }}>
+          <div style={{ 
+            padding: "1rem 1.25rem", 
+            borderBottom: "1px solid #e5e7eb",
+            background: "#fafafa"
+          }}>
+            <h3 style={{ fontSize: "0.95rem", fontWeight: 600, color: "#111827", margin: 0 }}>
+              {tx.reportsList}
+            </h3>
+          </div>
+          
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #e5e7eb", background: "#f9fafb" }}>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                    {tx.report}
+                  </th>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                    {tx.period}
+                  </th>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                    {tx.property}
+                  </th>
+                  <th style={{ padding: "12px 16px", textAlign: "left", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                    {tx.generatedOn}
+                  </th>
+                  <th style={{ padding: "12px 16px", textAlign: "right", fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase" }}>
+                    {tx.action}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredReports.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: "3rem", textAlign: "center" }}>
+                      <FileText size={48} style={{ color: "#d1d5db", marginBottom: "1rem" }} />
+                      <p style={{ color: "#9ca3af", fontWeight: 500 }}>{tx.noReports}</p>
+                      <p style={{ fontSize: 12, color: "#d1d5db", marginTop: 4 }}>{tx.noReportsSub}</p>
+                      
+  
+                    </td>
+                  </tr>
+                ) : (
+                  filteredReports.map((report) => (
+                    <tr key={report.id} style={{ borderBottom: "1px solid #f0f0f0", transition: "background 0.2s" }}>
+                      <td style={{ padding: "14px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: "#f0fdf4", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <FileText size={14} color={GREEN} />
+                          </div>
+                          <span style={{ fontWeight: 500, fontSize: 13, color: "#111827" }}>
                             {report.report_type === "monthly" ? tx.monthlyReport : tx.yearlyReport}
                           </span>
-                          <span className="text-xs text-gray-400">{report.property_name}</span>
                         </div>
-                      </div>
-                    </div>
-
-                    <div className={`flex items-center gap-3 ${isRTL ? "flex-row-reverse" : ""}`}>
-                      <div className={isRTL ? "text-left ml-2" : "text-right mr-2"}>
-                        <p className="text-sm font-semibold text-green-600">
-                          {report.net_profit.toLocaleString()} MAD
-                        </p>
-                        <p className="text-xs text-gray-400">{tx.netProfit}</p>
-                      </div>
-                      <button
-                        onClick={() => handleDownload(report.id, report.name)}
-                        disabled={downloading === report.id}
-                        className={`flex items-center gap-2 bg-[#22c55e] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[#16a34a] transition-all disabled:opacity-50 ${isRTL ? "flex-row-reverse" : ""}`}
-                      >
-                        {downloading === report.id
-                          ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          : <Download size={15} />
-                        }
-                        {downloading === report.id ? "..." : tx.download}
-                      </button>
-                      <button
-                        onClick={() => setExpandedReport(isExpanded ? null : report.id)}
-                        className="p-2 text-gray-400 hover:text-[#22c55e] transition-colors"
-                      >
-                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="mt-5 pt-4 border-t border-gray-100">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                          <p className="text-xs text-gray-400">{tx.totalRevenue}</p>
-                          <p className="text-lg font-semibold text-gray-900">
-                            {report.total_revenue.toLocaleString()} MAD
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-400">{tx.commission}</p>
-                          <p className="text-lg font-semibold text-red-500">
-                            {report.total_commission.toLocaleString()} MAD
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-400">{tx.expenses}</p>
-                          <p className="text-lg font-semibold text-orange-500">
-                            {report.total_expenses.toLocaleString()} MAD
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-400">{tx.netProfit}</p>
-                          <p className="text-lg font-semibold text-[#22c55e]">
-                            {report.net_profit.toLocaleString()} MAD
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400">
-                        {tx.genByAgency} {report.created_at}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {!loading && reports.length > 0 && (
-        <div className="mt-6 bg-[#f0fdf4] border border-green-100 rounded-xl p-4 text-center">
-          <p className="text-sm text-gray-500">
-            {tx.totalAvail(reports.length)}
-            <span className="font-semibold text-[#22c55e]">{reports.length}</span>
-          </p>
+                       </td>
+                      <td style={{ padding: "14px 16px", fontSize: 13, color: "#374151" }}>
+                        {report.report_type === "monthly" && report.month 
+                          ? `${getMonthName(report.month)} ${report.year}`
+                          : report.year}
+                       </td>
+                      <td style={{ padding: "14px 16px", fontSize: 13, color: "#6b7280" }}>
+                        {report.property_name || "Toutes les propriétés"}
+                       </td>
+                      <td style={{ padding: "14px 16px", fontSize: 12, color: "#9ca3af" }}>
+                        {formatDate(report.created_at, lang)}
+                       </td>
+                      <td style={{ padding: "14px 16px", textAlign: "right" }}>
+                        <button
+                          onClick={() => handleDownload(report.id, report.name)}
+                          disabled={downloading === report.id}
+                          style={{
+                            padding: "6px 14px",
+                            borderRadius: 8,
+                            border: "1px solid #e5e7eb",
+                            background: "#fff",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: 12,
+                            fontWeight: 500,
+                            color: GREEN,
+                            transition: "all 0.2s"
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = "#f0fdf4"}
+                          onMouseLeave={e => e.currentTarget.style.background = "#fff"}
+                        >
+                          {downloading === report.id ? (
+                            <div style={{ width: 12, height: 12, border: "2px solid #e5e7eb", borderTopColor: GREEN, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                          ) : (
+                            <Download size={12} />
+                          )}
+                          {tx.download}
+                        </button>
+                       </td>
+                     </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      )}
+
+        {/* Contact Support Section */}
+        <div style={{
+          background: "linear-gradient(135deg, #f0fdf4, #ffffff)",
+          border: `1px solid ${GREEN}`,
+          borderRadius: 16,
+          padding: "1.5rem",
+          textAlign: "center"
+        }}>
+          <MessageCircle size={32} color={GREEN} style={{ marginBottom: "0.75rem" }} />
+          <p style={{ fontSize: 14, color: "#374151", marginBottom: "0.5rem" }}>
+            {tx.contactMessage}
+          </p>
+          <button
+            onClick={contactAgency}
+            style={{
+              marginTop: "0.5rem",
+              padding: "8px 20px",
+              borderRadius: 10,
+              border: "none",
+              background: GREEN,
+              color: "#fff",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 13,
+              fontWeight: 500,
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = GREEN_DARK}
+            onMouseLeave={e => e.currentTarget.style.background = GREEN}
+          >
+            <MessageCircle size={14} />
+            {tx.contactSupport}
+          </button>
+        </div>
+
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
     </div>
   );
 }

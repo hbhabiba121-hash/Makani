@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, Bell, Globe, Eye, EyeOff, Check, Save, User, Mail, Building, Phone } from "lucide-react";
+import { Lock, Bell, Globe, Eye, EyeOff, Check, Save, User, Mail, Building, Phone, Shield, AlertCircle, CheckCircle } from "lucide-react";
 import api from "@/lib/axios";
 import { useLang } from "@/app/components/contexts/LanguageContext";
 
@@ -42,6 +42,10 @@ const labels = {
     pwdShort:       "Le mot de passe doit contenir au moins 8 caractères",
     pwdSuccess:     "Mot de passe modifié avec succès",
     pwdError:       "Erreur lors de la modification",
+    passwordStrength: "Force du mot de passe",
+    weak: "Faible",
+    medium: "Moyen",
+    strong: "Fort",
   },
   ar: {
     title:          "الإعدادات",
@@ -78,6 +82,10 @@ const labels = {
     pwdShort:       "كلمة المرور يجب أن تحتوي على 8 أحرف على الأقل",
     pwdSuccess:     "تم تغيير كلمة المرور بنجاح",
     pwdError:       "حدث خطأ أثناء التغيير",
+    passwordStrength: "قوة كلمة المرور",
+    weak: "ضعيفة",
+    medium: "متوسطة",
+    strong: "قوية",
   },
 } as const;
 
@@ -90,10 +98,14 @@ interface UserInfo {
   agency_email?: string;
 }
 
+const GREEN = "#22c55e";
+const GREEN_DARK = "#16a34a";
+const GREEN_BG = "#f0fdf4";
+
 export default function OwnerSettingsPage() {
   const router = useRouter();
   const { lang, setLang } = useLang();
-  const tx    = labels[lang];
+  const tx = labels[lang];
   const isRTL = lang === "ar";
 
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -111,6 +123,22 @@ export default function OwnerSettingsPage() {
   const [notifMonthly, setNotifMonthly] = useState(true);
   const [notifBooking, setNotifBooking] = useState(true);
   const [notifPayment, setNotifPayment] = useState(false);
+
+  const getPasswordStrength = (password: string): { score: number; label: string; color: string } => {
+    if (!password) return { score: 0, label: "", color: "#e5e7eb" };
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[0-9]/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+    
+    if (score <= 2) return { score: 25, label: tx.weak, color: "#ef4444" };
+    if (score <= 4) return { score: 60, label: tx.medium, color: "#f59e0b" };
+    return { score: 100, label: tx.strong, color: GREEN };
+  };
+
+  const passwordStrength = getPasswordStrength(newPwd);
 
   useEffect(() => {
     const token = localStorage.getItem("access");
@@ -163,314 +191,565 @@ export default function OwnerSettingsPage() {
     }
   };
 
-  const css = `
-    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&display=swap');
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap');
-
-    .st {
-      --green:      #22c55e;
-      --green-bg:   #f0fdf4;
-      --green-text: #16a34a;
-      --green-dim:  rgba(34,197,94,0.1);
-      --ink:        #111827;
-      --ink-2:      #374151;
-      --ink-3:      #6b7280;
-      --ink-4:      #9ca3af;
-      --border:     #f3f4f6;
-      --border-2:   #e5e7eb;
-      --bg:         #f9fafb;
-      --surface:    #ffffff;
-      --f: ${isRTL ? "'Cairo'" : "'Geist'"}, system-ui, sans-serif;
-      font-family: var(--f);
-      direction: ${isRTL ? "rtl" : "ltr"};
-      background: var(--bg);
-      min-height: 100vh;
-      padding: 2rem;
-      color: var(--ink);
-    }
-
-    .st-header { margin-bottom: 2rem; }
-    .st-title  { font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
-    .st-sub    { font-size: 13px; color: var(--ink-4); margin-top: 4px; }
-
-    .st-sections { display: flex; flex-direction: column; gap: 1.5rem; max-width: 640px; }
-
-    .st-card { background: var(--surface); border: 1px solid var(--border-2); border-radius: 16px; overflow: hidden; }
-
-    .st-card-head {
-      padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 10px;
-      ${isRTL ? "flex-direction: row-reverse" : ""};
-    }
-    .st-card-head-icon {
-      width: 36px; height: 36px; border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      background: var(--green-dim); flex-shrink: 0;
-    }
-    .st-card-head-title { font-size: 15px; font-weight: 700; color: var(--ink); }
-    .st-card-head-sub   { font-size: 12px; color: var(--ink-4); margin-top: 2px; }
-    .st-card-body { padding: 1.5rem; }
-
-    .st-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    .st-info-label {
-      font-size: 11px; font-weight: 500; color: var(--ink-4);
-      margin-bottom: 5px; display: flex; align-items: center; gap: 5px;
-      ${isRTL ? "flex-direction: row-reverse; text-align: right" : ""};
-    }
-    .st-info-val {
-      font-size: 13.5px; font-weight: 500; color: var(--ink-2);
-      padding: 9px 13px; background: var(--bg);
-      border: 1.5px solid var(--border-2); border-radius: 10px;
-      min-height: 40px; display: flex; align-items: center;
-      ${isRTL ? "justify-content: flex-end" : ""};
-    }
-    .st-info-val.muted { color: var(--ink-4); font-style: italic; }
-
-    .st-section-sep {
-      font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
-      color: var(--ink-4); text-transform: uppercase;
-      padding: 0.5rem 0; margin: 0.25rem 0;
-      border-top: 1px solid var(--border);
-      grid-column: 1 / -1;
-      ${isRTL ? "text-align: right" : ""};
-    }
-
-    .st-field { margin-bottom: 1rem; }
-    .st-field:last-of-type { margin-bottom: 0; }
-    .st-label {
-      display: block; font-size: 12px; font-weight: 500;
-      color: var(--ink-2); margin-bottom: 6px;
-      ${isRTL ? "text-align: right" : ""};
-    }
-    .st-input-wrap { position: relative; }
-    .st-input {
-      width: 100%; padding: 10px 14px;
-      border: 1.5px solid var(--border-2); border-radius: 10px;
-      font-size: 13.5px; color: var(--ink);
-      font-family: var(--f); background: var(--bg);
-      outline: none; transition: border-color 0.15s, box-shadow 0.15s;
-      ${isRTL ? "text-align: right; padding-left: 40px" : "padding-right: 40px"};
-    }
-    .st-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(34,197,94,0.1); background: var(--surface); }
-    .st-eye {
-      position: absolute; top: 50%;
-      ${isRTL ? "left: 12px" : "right: 12px"};
-      transform: translateY(-50%);
-      background: none; border: none; cursor: pointer;
-      color: var(--ink-4); padding: 0; display: flex; align-items: center;
-    }
-    .st-eye:hover { color: var(--ink-2); }
-
-    .st-error   { font-size: 12px; color: #ef4444; margin-top: 8px; ${isRTL ? "text-align: right" : ""}; }
-    .st-success { font-size: 12px; color: var(--green-text); margin-top: 8px; ${isRTL ? "text-align: right" : ""}; }
-
-    .st-btn {
-      margin-top: 1.25rem; display: flex; align-items: center; gap: 7px;
-      padding: 10px 20px; border-radius: 10px; border: none;
-      background: var(--green); color: #fff;
-      font-size: 13px; font-weight: 600; cursor: pointer;
-      font-family: var(--f); transition: opacity 0.12s;
-      box-shadow: 0 2px 8px rgba(34,197,94,0.25);
-      ${isRTL ? "flex-direction: row-reverse" : ""};
-    }
-    .st-btn:hover    { opacity: 0.88; }
-    .st-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-    .st-notif-row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 12px 0; border-bottom: 1px solid var(--border);
-      ${isRTL ? "flex-direction: row-reverse" : ""};
-    }
-    .st-notif-row:last-child  { border-bottom: none; padding-bottom: 0; }
-    .st-notif-row:first-child { padding-top: 0; }
-    .st-notif-label { font-size: 13.5px; font-weight: 500; color: var(--ink); }
-    .st-notif-desc  { font-size: 11px; color: var(--ink-4); margin-top: 2px; }
-    .st-toggle { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
-    .st-toggle input { opacity: 0; width: 0; height: 0; }
-    .st-toggle-slider {
-      position: absolute; inset: 0; background: var(--border-2);
-      border-radius: 999px; cursor: pointer; transition: background 0.2s;
-    }
-    .st-toggle-slider::before {
-      content: ""; position: absolute; width: 18px; height: 18px;
-      border-radius: 50%; background: white; top: 3px; left: 3px;
-      transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-    }
-    .st-toggle input:checked + .st-toggle-slider { background: var(--green); }
-    .st-toggle input:checked + .st-toggle-slider::before { transform: translateX(20px); }
-
-    .st-lang-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .st-lang-btn {
-      padding: 14px; border-radius: 12px; border: 2px solid var(--border-2);
-      background: var(--bg); cursor: pointer; font-family: var(--f);
-      transition: all 0.15s; display: flex; align-items: center;
-      justify-content: center; gap: 8px;
-      font-size: 14px; font-weight: 500; color: var(--ink-2);
-    }
-    .st-lang-btn:hover { border-color: var(--green); background: var(--green-bg); }
-    .st-lang-btn.active { border-color: var(--green); background: var(--green-bg); color: var(--green-text); }
-    .st-lang-check {
-      width: 18px; height: 18px; border-radius: 50%; background: var(--green);
-      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-    }
-  `;
-
   return (
-    <>
-      <style>{css}</style>
-      <div className="st">
-
-        <div className="st-header">
-          <h1 className="st-title">{tx.title}</h1>
-          <p className="st-sub">{tx.subtitle}</p>
+    <div style={{
+      fontFamily: isRTL ? "'Cairo', system-ui" : "'Geist', system-ui",
+      direction: isRTL ? "rtl" : "ltr",
+      background: "#f9fafb",
+      minHeight: "100vh",
+      padding: "1.75rem 2rem"
+    }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        {/* Header */}
+        <div style={{ marginBottom: "2rem" }}>
+          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#111827", margin: 0, letterSpacing: "-0.02em" }}>
+            {tx.title}
+          </h1>
+          <p style={{ fontSize: "0.85rem", color: "#6b7280", marginTop: 4 }}>{tx.subtitle}</p>
         </div>
 
-        <div className="st-sections">
-
-          <div className="st-card">
-            <div className="st-card-head">
-              <div className="st-card-head-icon">
-                <User size={16} color="var(--green-text)" />
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          {/* Account Information Card */}
+          <div style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            overflow: "hidden",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+          }}>
+            <div style={{
+              padding: "1rem 1.5rem",
+              borderBottom: "1px solid #f3f4f6",
+              background: "#fafafa",
+              display: "flex",
+              alignItems: "center",
+              gap: 10
+            }}>
+              <div style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: GREEN_BG,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <User size={16} color={GREEN} />
               </div>
               <div>
-                <div className="st-card-head-title">{tx.accountInfo}</div>
-                <div className="st-card-head-sub">{tx.accountInfoSub}</div>
+                <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "#111827" }}>{tx.accountInfo}</div>
+                <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 2 }}>{tx.accountInfoSub}</div>
               </div>
             </div>
-            <div className="st-card-body">
-              <div className="st-info-grid">
-
+            
+            <div style={{ padding: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: isRTL ? "1fr 1fr" : "1fr 1fr", gap: "1rem" }}>
                 <div>
-                  <div className="st-info-label"><User size={11} /> {tx.firstName}</div>
-                  <div className="st-info-val">{userInfo?.first_name || "—"}</div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: "#9ca3af", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
+                    <User size={11} /> {tx.firstName}
+                  </div>
+                  <div style={{
+                    fontSize: 13.5,
+                    fontWeight: 500,
+                    color: "#374151",
+                    padding: "9px 13px",
+                    background: "#f9fafb",
+                    border: "1.5px solid #f3f4f6",
+                    borderRadius: 10
+                  }}>
+                    {userInfo?.first_name || "—"}
+                  </div>
                 </div>
                 <div>
-                  <div className="st-info-label"><User size={11} /> {tx.lastName}</div>
-                  <div className="st-info-val">{userInfo?.last_name || "—"}</div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: "#9ca3af", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
+                    <User size={11} /> {tx.lastName}
+                  </div>
+                  <div style={{
+                    fontSize: 13.5,
+                    fontWeight: 500,
+                    color: "#374151",
+                    padding: "9px 13px",
+                    background: "#f9fafb",
+                    border: "1.5px solid #f3f4f6",
+                    borderRadius: 10
+                  }}>
+                    {userInfo?.last_name || "—"}
+                  </div>
                 </div>
-
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <div className="st-info-label"><Mail size={11} /> {tx.emailLabel}</div>
-                  <div className="st-info-val">{userInfo?.email || "—"}</div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: "#9ca3af", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
+                    <Mail size={11} /> {tx.emailLabel}
+                  </div>
+                  <div style={{
+                    fontSize: 13.5,
+                    fontWeight: 500,
+                    color: "#374151",
+                    padding: "9px 13px",
+                    background: "#f9fafb",
+                    border: "1.5px solid #f3f4f6",
+                    borderRadius: 10
+                  }}>
+                    {userInfo?.email || "—"}
+                  </div>
                 </div>
-
-                <div className="st-section-sep">
-                  <Building size={11} style={{ display: "inline", marginRight: 5 }} />
-                  {tx.agencyLabel}
+                
+                {/* Agency Section Separator */}
+                <div style={{
+                  gridColumn: "1 / -1",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: "0.06em",
+                  color: "#9ca3af",
+                  textTransform: "uppercase",
+                  padding: "0.5rem 0",
+                  marginTop: "0.25rem",
+                  borderTop: "1px solid #f3f4f6",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6
+                }}>
+                  <Building size={11} /> {tx.agencyLabel}
                 </div>
-
+                
                 <div style={{ gridColumn: "1 / -1" }}>
-                  <div className="st-info-label"><Building size={11} /> {tx.agencyLabel}</div>
-                  <div className={`st-info-val${!userInfo?.agency_name ? " muted" : ""}`}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: "#9ca3af", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
+                    <Building size={11} /> {tx.agencyLabel}
+                  </div>
+                  <div style={{
+                    fontSize: 13.5,
+                    fontWeight: 500,
+                    color: userInfo?.agency_name ? "#374151" : "#9ca3af",
+                    padding: "9px 13px",
+                    background: "#f9fafb",
+                    border: "1.5px solid #f3f4f6",
+                    borderRadius: 10,
+                    fontStyle: userInfo?.agency_name ? "normal" : "italic"
+                  }}>
                     {userInfo?.agency_name || tx.noAgency}
                   </div>
                 </div>
-
+                
                 {userInfo?.agency_phone && (
                   <div>
-                    <div className="st-info-label"><Phone size={11} /> {tx.agencyPhone}</div>
-                    <div className="st-info-val">{userInfo.agency_phone}</div>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: "#9ca3af", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
+                      <Phone size={11} /> {tx.agencyPhone}
+                    </div>
+                    <div style={{
+                      fontSize: 13.5,
+                      fontWeight: 500,
+                      color: "#374151",
+                      padding: "9px 13px",
+                      background: "#f9fafb",
+                      border: "1.5px solid #f3f4f6",
+                      borderRadius: 10
+                    }}>
+                      {userInfo.agency_phone}
+                    </div>
                   </div>
                 )}
-
+                
                 {userInfo?.agency_email && (
                   <div>
-                    <div className="st-info-label"><Mail size={11} /> {tx.agencyEmail}</div>
-                    <div className="st-info-val">{userInfo.agency_email}</div>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: "#9ca3af", marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
+                      <Mail size={11} /> {tx.agencyEmail}
+                    </div>
+                    <div style={{
+                      fontSize: 13.5,
+                      fontWeight: 500,
+                      color: "#374151",
+                      padding: "9px 13px",
+                      background: "#f9fafb",
+                      border: "1.5px solid #f3f4f6",
+                      borderRadius: 10
+                    }}>
+                      {userInfo.agency_email}
+                    </div>
                   </div>
                 )}
-
               </div>
             </div>
           </div>
 
-          <div className="st-card">
-            <div className="st-card-head">
-              <div className="st-card-head-icon"><Lock size={16} color="var(--green-text)" /></div>
+          {/* Security Card */}
+          <div style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            overflow: "hidden",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+          }}>
+            <div style={{
+              padding: "1rem 1.5rem",
+              borderBottom: "1px solid #f3f4f6",
+              background: "#fafafa",
+              display: "flex",
+              alignItems: "center",
+              gap: 10
+            }}>
+              <div style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: GREEN_BG,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <Shield size={16} color={GREEN} />
+              </div>
               <div>
-                <div className="st-card-head-title">{tx.security}</div>
-                <div className="st-card-head-sub">{tx.securitySub}</div>
+                <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "#111827" }}>{tx.security}</div>
+                <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 2 }}>{tx.securitySub}</div>
               </div>
             </div>
-            <div className="st-card-body">
-              {[
-                { label: tx.currentPwd, val: currentPwd, set: setCurrentPwd, show: showCurrent, toggle: () => setShowCurrent(v => !v) },
-                { label: tx.newPwd,     val: newPwd,     set: setNewPwd,     show: showNew,     toggle: () => setShowNew(v => !v) },
-                { label: tx.confirmPwd, val: confirmPwd, set: setConfirmPwd, show: showConfirm, toggle: () => setShowConfirm(v => !v) },
-              ].map(({ label, val, set, show, toggle }) => (
-                <div key={label} className="st-field">
-                  <label className="st-label">{label}</label>
-                  <div className="st-input-wrap">
-                    <input type={show ? "text" : "password"} className="st-input"
-                      value={val} onChange={e => set(e.target.value)} />
-                    <button className="st-eye" onClick={toggle}>
-                      {show ? <EyeOff size={15} /> : <Eye size={15} />}
+            
+            <div style={{ padding: "1.5rem" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {/* Current Password */}
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#374151", marginBottom: 6 }}>{tx.currentPwd}</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showCurrent ? "text" : "password"}
+                      value={currentPwd}
+                      onChange={(e) => setCurrentPwd(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "10px 40px 10px 14px",
+                        border: "1.5px solid #e5e7eb",
+                        borderRadius: 10,
+                        fontSize: 13.5,
+                        color: "#111827",
+                        background: "#f9fafb",
+                        outline: "none",
+                        transition: "all 0.15s"
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = GREEN}
+                      onBlur={(e) => e.currentTarget.style.borderColor = "#e5e7eb"}
+                    />
+                    <button
+                      onClick={() => setShowCurrent(!showCurrent)}
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        right: 12,
+                        transform: "translateY(-50%)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#9ca3af",
+                        padding: 0
+                      }}
+                    >
+                      {showCurrent ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
                 </div>
-              ))}
-              {pwdError   && <div className="st-error">{pwdError}</div>}
-              {pwdSuccess && <div className="st-success">{pwdSuccess}</div>}
-              <button className="st-btn" onClick={handlePasswordSave}
-                disabled={pwdSaving || !currentPwd || !newPwd || !confirmPwd}>
-                <Save size={14} strokeWidth={2} />
+
+                {/* New Password */}
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#374151", marginBottom: 6 }}>{tx.newPwd}</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showNew ? "text" : "password"}
+                      value={newPwd}
+                      onChange={(e) => setNewPwd(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "10px 40px 10px 14px",
+                        border: "1.5px solid #e5e7eb",
+                        borderRadius: 10,
+                        fontSize: 13.5,
+                        color: "#111827",
+                        background: "#f9fafb",
+                        outline: "none",
+                        transition: "all 0.15s"
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = GREEN}
+                      onBlur={(e) => e.currentTarget.style.borderColor = "#e5e7eb"}
+                    />
+                    <button
+                      onClick={() => setShowNew(!showNew)}
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        right: 12,
+                        transform: "translateY(-50%)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#9ca3af",
+                        padding: 0
+                      }}
+                    >
+                      {showNew ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                  
+                  {/* Password Strength Indicator */}
+                  {newPwd && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: 10.5, color: "#9ca3af" }}>{tx.passwordStrength}</span>
+                        <span style={{ fontSize: 10.5, fontWeight: 500, color: passwordStrength.color }}>{passwordStrength.label}</span>
+                      </div>
+                      <div style={{ width: "100%", height: 4, background: "#e5e7eb", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{ width: `${passwordStrength.score}%`, height: "100%", background: passwordStrength.color, borderRadius: 2, transition: "width 0.3s ease" }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#374151", marginBottom: 6 }}>{tx.confirmPwd}</label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showConfirm ? "text" : "password"}
+                      value={confirmPwd}
+                      onChange={(e) => setConfirmPwd(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "10px 40px 10px 14px",
+                        border: "1.5px solid #e5e7eb",
+                        borderRadius: 10,
+                        fontSize: 13.5,
+                        color: "#111827",
+                        background: "#f9fafb",
+                        outline: "none",
+                        transition: "all 0.15s"
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = GREEN}
+                      onBlur={(e) => e.currentTarget.style.borderColor = "#e5e7eb"}
+                    />
+                    <button
+                      onClick={() => setShowConfirm(!showConfirm)}
+                      style={{
+                        position: "absolute",
+                        top: "50%",
+                        right: 12,
+                        transform: "translateY(-50%)",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#9ca3af",
+                        padding: 0
+                      }}
+                    >
+                      {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Error/Success Messages */}
+              {pwdError && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#ef4444", marginTop: 12, padding: "8px 12px", background: "#fef2f2", borderRadius: 8 }}>
+                  <AlertCircle size={14} />
+                  {pwdError}
+                </div>
+              )}
+              {pwdSuccess && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: GREEN, marginTop: 12, padding: "8px 12px", background: GREEN_BG, borderRadius: 8 }}>
+                  <CheckCircle size={14} />
+                  {pwdSuccess}
+                </div>
+              )}
+
+              <button
+                onClick={handlePasswordSave}
+                disabled={pwdSaving || !currentPwd || !newPwd || !confirmPwd}
+                style={{
+                  marginTop: "1.25rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "10px 20px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: GREEN,
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "opacity 0.15s",
+                  opacity: (pwdSaving || !currentPwd || !newPwd || !confirmPwd) ? 0.5 : 1
+                }}
+              >
+                <Save size={14} />
                 {pwdSaving ? tx.saving : tx.savePassword}
               </button>
             </div>
           </div>
 
-          <div className="st-card">
-            <div className="st-card-head">
-              <div className="st-card-head-icon"><Bell size={16} color="var(--green-text)" /></div>
+          {/* Notifications Card */}
+          <div style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            overflow: "hidden",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+          }}>
+            <div style={{
+              padding: "1rem 1.5rem",
+              borderBottom: "1px solid #f3f4f6",
+              background: "#fafafa",
+              display: "flex",
+              alignItems: "center",
+              gap: 10
+            }}>
+              <div style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: GREEN_BG,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <Bell size={16} color={GREEN} />
+              </div>
               <div>
-                <div className="st-card-head-title">{tx.notifications}</div>
-                <div className="st-card-head-sub">{tx.notifSub}</div>
+                <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "#111827" }}>{tx.notifications}</div>
+                <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 2 }}>{tx.notifSub}</div>
               </div>
             </div>
-            <div className="st-card-body">
+            
+            <div style={{ padding: "1.5rem" }}>
               {[
                 { label: tx.notifMonthly, desc: tx.notifMonthlyD, val: notifMonthly, set: setNotifMonthly },
                 { label: tx.notifBooking, desc: tx.notifBookingD, val: notifBooking, set: setNotifBooking },
                 { label: tx.notifPayment, desc: tx.notifPaymentD, val: notifPayment, set: setNotifPayment },
-              ].map(({ label, desc, val, set }) => (
-                <div key={label} className="st-notif-row">
+              ].map(({ label, desc, val, set }, idx) => (
+                <div key={label} style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: idx === 0 ? "0 0 12px 0" : "12px 0",
+                  borderBottom: idx === 2 ? "none" : "1px solid #f3f4f6"
+                }}>
                   <div>
-                    <div className="st-notif-label">{label}</div>
-                    <div className="st-notif-desc">{desc}</div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: "#111827" }}>{label}</div>
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{desc}</div>
                   </div>
-                  <label className="st-toggle">
-                    <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} />
-                    <span className="st-toggle-slider" />
+                  <label style={{ position: "relative", width: 44, height: 24, flexShrink: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={val}
+                      onChange={(e) => set(e.target.checked)}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: val ? GREEN : "#e5e7eb",
+                      borderRadius: 999,
+                      cursor: "pointer",
+                      transition: "background 0.2s"
+                    }}>
+                      <span style={{
+                        position: "absolute",
+                        width: 18,
+                        height: 18,
+                        borderRadius: "50%",
+                        background: "white",
+                        top: 3,
+                        left: val ? 23 : 3,
+                        transition: "transform 0.2s, left 0.2s",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.15)"
+                      }} />
+                    </span>
                   </label>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="st-card">
-            <div className="st-card-head">
-              <div className="st-card-head-icon"><Globe size={16} color="var(--green-text)" /></div>
+          {/* Language Card */}
+          <div style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 16,
+            overflow: "hidden",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+          }}>
+            <div style={{
+              padding: "1rem 1.5rem",
+              borderBottom: "1px solid #f3f4f6",
+              background: "#fafafa",
+              display: "flex",
+              alignItems: "center",
+              gap: 10
+            }}>
+              <div style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: GREEN_BG,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <Globe size={16} color={GREEN} />
+              </div>
               <div>
-                <div className="st-card-head-title">{tx.language}</div>
-                <div className="st-card-head-sub">{tx.languageSub}</div>
+                <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "#111827" }}>{tx.language}</div>
+                <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: 2 }}>{tx.languageSub}</div>
               </div>
             </div>
-            <div className="st-card-body">
-              <div className="st-lang-grid">
-                <button className={`st-lang-btn${lang === "fr" ? " active" : ""}`} onClick={() => setLang("fr")}>
+            
+            <div style={{ padding: "1.5rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <button
+                  onClick={() => setLang("fr")}
+                  style={{
+                    padding: "12px",
+                    borderRadius: 10,
+                    border: lang === "fr" ? `2px solid ${GREEN}` : "1.5px solid #e5e7eb",
+                    background: lang === "fr" ? GREEN_BG : "#f9fafb",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    transition: "all 0.15s",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: lang === "fr" ? GREEN : "#374151",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8
+                  }}
+                >
                   🇫🇷 {tx.french}
-                  {lang === "fr" && <span className="st-lang-check"><Check size={11} color="white" strokeWidth={3} /></span>}
+                  {lang === "fr" && <Check size={14} color={GREEN} />}
                 </button>
-                <button className={`st-lang-btn${lang === "ar" ? " active" : ""}`} onClick={() => setLang("ar")}>
+                <button
+                  onClick={() => setLang("ar")}
+                  style={{
+                    padding: "12px",
+                    borderRadius: 10,
+                    border: lang === "ar" ? `2px solid ${GREEN}` : "1.5px solid #e5e7eb",
+                    background: lang === "ar" ? GREEN_BG : "#f9fafb",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                    transition: "all 0.15s",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: lang === "ar" ? GREEN : "#374151",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8
+                  }}
+                >
                   🇸🇦 {tx.arabic}
-                  {lang === "ar" && <span className="st-lang-check"><Check size={11} color="white" strokeWidth={3} /></span>}
+                  {lang === "ar" && <Check size={14} color={GREEN} />}
                 </button>
               </div>
             </div>
           </div>
-
         </div>
       </div>
-    </>
+    </div>
   );
 }
