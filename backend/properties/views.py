@@ -10,14 +10,16 @@ class CanManageProperties(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        return request.user.role in ['admin', 'staff']
+        # ADD 'property_staff' to allowed roles
+        return request.user.role in ['admin', 'staff', 'property_staff']
     
     def has_object_permission(self, request, view, obj):
         if not request.user.is_authenticated:
             return False
         if request.user.role == 'admin':
             return True
-        if request.user.role in ['admin', 'staff']:
+        # ADD 'property_staff' to allowed roles
+        if request.user.role in ['admin', 'staff', 'property_staff']:
             return obj.agency == request.user.agency
         return False
 
@@ -31,7 +33,8 @@ class CanViewProperties(permissions.BasePermission):
             return False
         if request.user.role == 'admin':
             return True
-        if request.user.role in ['admin', 'staff']:
+        # ADD 'property_staff' to allowed roles
+        if request.user.role in ['admin', 'staff', 'property_staff']:
             return obj.agency == request.user.agency
         if request.user.role == 'owner':
             return obj.owner and obj.owner.user == request.user
@@ -54,12 +57,23 @@ class PropertyViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        print(f"DEBUG: User {user.email} has role: {user.role}")  # Debug line
+        
         if user.role == 'admin':
-            return Property.objects.all().prefetch_related('images')
-        elif user.role == 'staff':
-            return Property.objects.filter(agency=user.agency).prefetch_related('images')
+            result = Property.objects.all().prefetch_related('images')
+            print(f"DEBUG: Admin - returning {result.count()} properties")  # Debug line
+            return result
+        # ADD 'property_staff' here
+        elif user.role in ['staff', 'property_staff']:
+            result = Property.objects.filter(agency=user.agency).prefetch_related('images')
+            print(f"DEBUG: Staff/Property Staff - returning {result.count()} properties for agency {user.agency}")  # Debug line
+            return result
         elif user.role == 'owner' and hasattr(user, 'owner_profile'):
-            return Property.objects.filter(owner=user.owner_profile).prefetch_related('images')
+            result = Property.objects.filter(owner=user.owner_profile).prefetch_related('images')
+            print(f"DEBUG: Owner - returning {result.count()} properties")  # Debug line
+            return result
+        
+        print(f"DEBUG: No matching role - returning empty")  # Debug line
         return Property.objects.none()
 
     def perform_create(self, serializer):
@@ -71,9 +85,9 @@ class PropertyViewSet(viewsets.ModelViewSet):
         """Upload multiple images for a property"""
         property_obj = self.get_object()
         
-        # Check permission
+        # Check permission - ADD 'property_staff' here too
         user = request.user
-        if user.role not in ['admin', 'staff']:
+        if user.role not in ['admin', 'staff', 'property_staff']:
             if user.role == 'owner' and property_obj.owner and property_obj.owner.user != user:
                 return Response(
                     {'error': 'You do not have permission to upload images for this property'},

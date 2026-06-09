@@ -1,14 +1,14 @@
 
+# properties/permissions.py or wherever your permissions are
 
 from rest_framework import permissions
 
 class CanManageProperties(permissions.BasePermission):
-
-    
     def has_permission(self, request, view):
         if not request.user.is_authenticated:
             return False
-        return request.user.role in ['admin', 'staff']
+        # Accept both 'staff' AND 'property_staff'
+        return request.user.role in ['admin', 'staff', 'property_staff']
     
     def has_object_permission(self, request, view, obj):
         if not request.user.is_authenticated:
@@ -19,15 +19,13 @@ class CanManageProperties(permissions.BasePermission):
             return True
         
         # Agency staff/admin can only manage their agency's properties
-        if request.user.role in ['admin', 'staff']:
+        # Accept both 'staff' AND 'property_staff'
+        if request.user.role in ['admin', 'staff', 'property_staff']:
             return obj.agency == request.user.agency
         
         return False
 
-
 class CanViewProperties(permissions.BasePermission):
-
-    
     def has_permission(self, request, view):
         return request.user.is_authenticated
     
@@ -40,7 +38,8 @@ class CanViewProperties(permissions.BasePermission):
             return True
         
         # Agency staff/admin see all properties in their agency
-        if request.user.role in ['admin', 'staff']:
+        # Accept both 'staff' AND 'property_staff'
+        if request.user.role in ['admin', 'staff', 'property_staff']:
             return obj.agency == request.user.agency
         
         # Owners see only their own properties

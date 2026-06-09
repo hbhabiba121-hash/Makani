@@ -61,39 +61,66 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [language, setLanguage] = useState<Language>("fr");
-  const [showLangMenu, setShowLangMenu] = useState(false);
 
   const t = translations[language];
 
   useEffect(() => {
-    const t = setTimeout(() => setReady(true), 60);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setReady(true), 60);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    
     try {
-      const res = await api.post("/api/token/", { email, password });
+      // Use your custom login endpoint that accepts email
+      const res = await api.post("/api/users/login/", { 
+        email: email,
+        password: password 
+      });
+      
+      // Store tokens and user data
       localStorage.setItem("access", res.data.access);
       localStorage.setItem("refresh", res.data.refresh);
-      try {
-        const u = await api.get("/api/users/profile/");
-        localStorage.setItem("user", JSON.stringify(u.data));
-        localStorage.setItem("role", u.data.role);
-        if (u.data.role === "owner") router.push("/owner");
-        else if (u.data.role === "admin") router.push("/dashboard");
-        else if (u.data.role === "staff") router.push("/staff");
-        else router.push("/dashboard");
-      } catch { router.push("/dashboard"); }
-    } catch { setError(t.error); }
-    finally { setLoading(false); }
+      localStorage.setItem("user", JSON.stringify(res.data.user));
+      localStorage.setItem("role", res.data.user.role);
+      localStorage.setItem("user_id", res.data.user.id.toString());
+      
+      console.log("User logged in successfully!");
+      console.log("User role:", res.data.user.role);
+      
+      // Redirect based on role
+      const userRole = res.data.user.role;
+      let redirectPath = "/dashboard";
+      
+      if (userRole === 'finance_staff') {
+        redirectPath = "/staff/finance-staff";
+      } else if (userRole === 'property_staff') {
+        redirectPath = "/staff/property-staff";
+      } else if (userRole === 'agency_manager') {
+        redirectPath = "/staff/agency-manager";
+      } else if (userRole === 'agency_owner' || userRole === 'admin' || userRole === 'super_admin') {
+        redirectPath = "/dashboard";
+      } else if (userRole === 'owner') {
+        redirectPath = "/owner";
+      } else if (userRole === 'staff') {
+        redirectPath = "/staff";
+      }
+      
+      console.log("Redirecting to:", redirectPath);
+      window.location.href = redirectPath;
+      
+    } catch (loginError: any) {
+      console.error("Login error:", loginError);
+      setError(t.error);
+      setLoading(false);
+    }
   };
 
   const toggleLanguage = () => {
     setLanguage(lang => lang === "fr" ? "ar" : "fr");
-    setShowLangMenu(false);
   };
 
   return (
@@ -526,7 +553,7 @@ export default function LoginPage() {
 
       <div className="mk" dir={language === "ar" ? "rtl" : "ltr"}>
 
-        {/* LEFT */}
+        {/* LEFT PANEL */}
         <aside className="mk-panel">
           <div className="mk-grain" />
           <div className="mk-blob mk-blob-1" />
@@ -620,10 +647,9 @@ export default function LoginPage() {
           </div>
         </aside>
 
-        {/* RIGHT */}
+        {/* RIGHT PANEL - LOGIN FORM */}
         <main className="mk-right">
 
-          {/* Language Switcher */}
           <div className="mk-lang-switcher">
             <button onClick={toggleLanguage} className="mk-lang-btn">
               <Globe size={12} />
@@ -678,7 +704,9 @@ export default function LoginPage() {
                 <div>
                   <div className="mk-row">
                     <label className="mk-lbl" htmlFor="password">{t.password}</label>
-                    <button type="button" className="mk-link">{t.forgotPassword}</button>
+                    <button type="button" className="mk-link" onClick={() => router.push("/forgot-password")}>
+                      {t.forgotPassword}
+                    </button>
                   </div>
                   <div className="mk-iw">
                     <input id="password" type={showPassword ? "text" : "password"}
@@ -686,7 +714,7 @@ export default function LoginPage() {
                       value={password} onChange={e => setPassword(e.target.value)}
                       disabled={loading} autoComplete="current-password" />
                     <button type="button" className="mk-eye"
-                      onClick={() => setShowPassword(v => !v)} aria-label={language === "ar" ? "عرض كلمة المرور" : "Voir le mot de passe"}>
+                      onClick={() => setShowPassword(v => !v)}>
                       {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                     </button>
                   </div>
@@ -706,7 +734,7 @@ export default function LoginPage() {
             </div>
 
             <p className="mk-foot">
-              {t.noAccount} <button type="button">{t.requestAccess}</button>
+              {t.noAccount} <button type="button" onClick={() => router.push("/request-access")}>{t.requestAccess}</button>
             </p>
 
           </div>

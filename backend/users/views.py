@@ -1,4 +1,4 @@
-# views.py - FULLY CORRECTED VERSION
+# users/views.py - COMPLETELY FIXED VERSION
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -40,7 +40,7 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        if user.role == 'admin':
+        if user.role == 'admin' or user.role == 'super_admin':
             return User.objects.all()
         elif user.role == 'staff':
             return User.objects.filter(agency=user.agency)
@@ -48,7 +48,8 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
             return User.objects.filter(id=user.id)
         return User.objects.none()
     
-    
+ # users/views.py - Replace your LoginView with this debug version
+
 class LoginView(TokenObtainPairView):
     """Handles user login and returns JWT tokens"""
     
@@ -57,23 +58,44 @@ class LoginView(TokenObtainPairView):
         email = request.data.get('email')
         password = request.data.get('password')
         
+        print(f"DEBUG LOGIN - Email: {email}")
+        print(f"DEBUG LOGIN - Password provided: {'Yes' if password else 'No'}")
+        
         if not email or not password:
+            print("DEBUG LOGIN - Missing email or password")
             return Response({
                 'error': 'Email and password are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Check if user exists
+        try:
+            user_exists = User.objects.filter(email=email).exists()
+            print(f"DEBUG LOGIN - User exists in database: {user_exists}")
+        except Exception as e:
+            print(f"DEBUG LOGIN - Error checking user: {e}")
+        
         user = authenticate(email=email, password=password)
         
         if not user:
+            print(f"DEBUG LOGIN - Authentication failed for email: {email}")
+            # Try to get user to see if it exists but password is wrong
+            try:
+                user_obj = User.objects.get(email=email)
+                print(f"DEBUG LOGIN - User found but password incorrect. User is_active: {user_obj.is_active}")
+            except User.DoesNotExist:
+                print(f"DEBUG LOGIN - User does not exist at all")
+            
             return Response({
                 'error': 'Invalid credentials'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
         if not user.is_active:
+            print(f"DEBUG LOGIN - User is inactive: {email}")
             return Response({
                 'error': 'User account is disabled'
             }, status=status.HTTP_401_UNAUTHORIZED)
         
+        print(f"DEBUG LOGIN - Authentication successful for: {email}")
         refresh = RefreshToken.for_user(user)
         
         return Response({
@@ -81,7 +103,7 @@ class LoginView(TokenObtainPairView):
             'refresh': str(refresh),
             'access': str(refresh.access_token),
         })
-
+    
 class LogoutView(APIView):
     """Handles user logout by blacklisting refresh token"""
     
@@ -123,7 +145,7 @@ class ProfileView(generics.RetrieveUpdateAPIView):
         
         # Restrict role changes
         if 'role' in request.data and request.data['role'] != user.role:
-            if request.user.role != 'admin':
+            if request.user.role not in ['admin', 'super_admin']:
                 return Response({
                     'error': 'Only admins can change user roles'
                 }, status=status.HTTP_403_FORBIDDEN)
@@ -254,7 +276,7 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     def delete(self, request, *args, **kwargs):
         """Delete user - only admin or the user themselves"""
         user = self.get_object()
-        if request.user.role == 'admin' or request.user == user:
+        if request.user.role in ['admin', 'super_admin'] or request.user == user:
             user.delete()
             return Response({
                 'message': 'User deleted successfully'
@@ -273,16 +295,17 @@ class PromoteUserView(APIView):
             user = User.objects.get(id=user_id)
             new_role = request.data.get('role')
             
-            if new_role not in ['admin', 'staff', 'owner']:
+            valid_roles = ['super_admin', 'admin', 'agency_manager', 'finance_staff', 'property_staff', 'owner', 'staff']
+            if new_role not in valid_roles:
                 return Response({
-                    'error': 'Invalid role. Must be admin, staff, or owner'
+                    'error': f'Invalid role. Must be one of: {valid_roles}'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             user.role = new_role
             user.save()
             
             return Response({
-                'message': f'User {user.email} promoted to {new_role}',
+                'message': f'User {user.email} role changed to {new_role}',
                 'user': UserSerializer(user).data
             }, status=status.HTTP_200_OK)
             
@@ -303,14 +326,14 @@ class CreateUserByAgencyAdminView(APIView):
         user = request.user
         
         # Check if user is admin or agency admin
-        if user.role not in ['admin', 'staff']:
+        if user.role not in ['admin', 'super_admin', 'staff']:
             return Response({
                 'error': 'Only agency administrators can create users'
             }, status=status.HTTP_403_FORBIDDEN)
         
         # Get agency from requesting user
         agency = None
-        if user.role == 'admin':
+        if user.role in ['admin', 'super_admin']:
             # For platform admin, they can specify agency_id or use their own
             agency_id = request.data.get('agency_id')
             if agency_id:
@@ -348,9 +371,10 @@ class CreateUserByAgencyAdminView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Validate role
-        if role not in ['staff', 'owner']:
+        valid_roles = ['staff', 'owner', 'property_staff', 'finance_staff', 'agency_manager']
+        if role not in valid_roles:
             return Response({
-                'error': 'Role must be staff or owner'
+                'error': f'Role must be one of: {valid_roles}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Generate random password
@@ -374,7 +398,7 @@ class CreateUserByAgencyAdminView(APIView):
             return Response({
                 'message': f'User {email} created successfully. Invitation sent.',
                 'user': UserSerializer(new_user).data,
-                'temp_password': temp_password  # Remove this in production
+                'temp_password': temp_password
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
@@ -391,7 +415,7 @@ class AgencyUsersListView(APIView):
         user = request.user
         
         # Platform admin can see all users
-        if user.role == 'admin':
+        if user.role in ['admin', 'super_admin']:
             users = User.objects.all()
         else:
             # Agency users can only see users in their agency
@@ -414,6 +438,8 @@ class CreateStaffView(APIView):
 
     def post(self, request):
         user = request.user
+        print(f"DEBUG: CreateStaffView - User {user.email} (role: {user.role}) creating staff")
+        print(f"DEBUG: Request data: {request.data}")
 
         # Check if user has an agency
         if not user.agency:
@@ -422,8 +448,8 @@ class CreateStaffView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if user has permission (admin or staff can create staff)
-        if user.role not in ["admin", "staff"]:
+        # Check if user has permission
+        if user.role not in ["admin", "super_admin", "staff"]:
             return Response(
                 {"error": "You don't have permission to create staff members"}, 
                 status=status.HTTP_403_FORBIDDEN
@@ -433,6 +459,8 @@ class CreateStaffView(APIView):
         email = request.data.get("email")
         first_name = request.data.get("first_name")
         last_name = request.data.get("last_name")
+        phone = request.data.get("phone", "")
+        role = request.data.get("role", "property_staff")
 
         # Validate required fields
         if not all([email, first_name, last_name]):
@@ -448,6 +476,11 @@ class CreateStaffView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # Validate role
+        valid_roles = ['super_admin', 'admin', 'agency_manager', 'finance_staff', 'property_staff', 'owner']
+        if role not in valid_roles:
+            role = 'property_staff'  # Default role
+
         # Generate random temporary password
         temp_password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
 
@@ -458,9 +491,13 @@ class CreateStaffView(APIView):
                 password=temp_password,
                 first_name=first_name,
                 last_name=last_name,
-                role="staff",
-                agency=user.agency
+                role=role,
+                agency=user.agency,
+                phone=phone,
+                is_active=True
             )
+            
+            print(f"DEBUG: Created staff {staff.email} with role {staff.role}")
 
             return Response({
                 "message": "Staff member created successfully",
@@ -469,6 +506,7 @@ class CreateStaffView(APIView):
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
+            print(f"DEBUG: Error creating staff: {str(e)}")
             return Response(
                 {"error": f"Failed to create staff member: {str(e)}"}, 
                 status=status.HTTP_400_BAD_REQUEST
@@ -476,22 +514,40 @@ class CreateStaffView(APIView):
 
 
 class StaffListView(APIView):
-    """List all staff members in the same agency"""
+    """List all staff members in the same agency (including all staff roles)"""
     
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         user = request.user
+        print(f"DEBUG: StaffListView - User {user.email} (role: {user.role}) fetching staff")
 
         # Check if user has an agency
         if not user.agency:
+            print("DEBUG: No agency linked to user")
             return Response([], status=status.HTTP_200_OK)
 
-        # Get all staff members in the same agency
+        # Define which roles are considered "staff" for management
+        staff_roles = [
+            'super_admin', 
+            'admin', 
+            'agency_manager', 
+            'finance_staff', 
+            'property_staff', 
+            'staff'
+        ]
+        
+        # Get all users with staff roles in the same agency
         staff_members = User.objects.filter(
             agency=user.agency,
-            role="staff"
+            role__in=staff_roles
+        ).exclude(
+            role='owner'  # Exclude owners
         ).order_by('first_name', 'last_name')
+
+        print(f"DEBUG: Found {staff_members.count()} staff members")
+        for member in staff_members:
+            print(f"DEBUG: - {member.email} (role: {member.role})")
 
         serializer = UserSerializer(staff_members, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -504,32 +560,73 @@ class StaffDetailView(APIView):
 
     def patch(self, request, pk):
         user = request.user
+        print(f"DEBUG: StaffDetailView - User {user.email} (role: {user.role}) updating staff {pk}")
+        print(f"DEBUG: Request data: {request.data}")
 
-        # Check if user has an agency
         if not user.agency:
             return Response(
                 {"error": "No agency linked to your account"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Find the staff member (must be in same agency and role='staff')
+        # Find the staff member (must be in same agency)
         try:
-            staff = User.objects.get(pk=pk, role="staff", agency=user.agency)
+            staff = User.objects.get(pk=pk, agency=user.agency)
+            print(f"DEBUG: Found staff: {staff.email}, current role: {staff.role}")
         except User.DoesNotExist:
             return Response(
                 {"error": "Staff member not found"}, 
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Update fields (only if provided in request)
+        # Handle password reset
+        if 'password' in request.data:
+            new_password = request.data['password']
+            staff.set_password(new_password)
+            staff.save()
+            return Response(
+                {"message": "Password reset successfully"},
+                status=status.HTTP_200_OK
+            )
+
+        # Update basic fields
         if 'first_name' in request.data:
             staff.first_name = request.data['first_name']
+            print(f"DEBUG: Updated first_name to {staff.first_name}")
         
         if 'last_name' in request.data:
             staff.last_name = request.data['last_name']
+            print(f"DEBUG: Updated last_name to {staff.last_name}")
         
+        if 'phone' in request.data:
+            staff.phone = request.data['phone']
+            print(f"DEBUG: Updated phone to {staff.phone}")
+        
+        # Handle role update - THIS IS THE KEY PART
+        if 'role' in request.data:
+            new_role = request.data['role']
+            valid_roles = ['super_admin', 'admin', 'agency_manager', 'finance_staff', 'property_staff', 'owner', 'staff']
+            
+            if new_role not in valid_roles:
+                return Response(
+                    {"error": f"Invalid role. Must be one of: {valid_roles}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check permission - only super_admin or admin can change roles
+            if user.role not in ['super_admin', 'admin']:
+                return Response(
+                    {"error": "You don't have permission to change roles"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Update the role
+            old_role = staff.role
+            staff.role = new_role
+            print(f"DEBUG: Updated role for {staff.email} from {old_role} to {new_role}")
+        
+        # Handle email update
         if 'email' in request.data:
-            # Check if new email is already taken by another user
             new_email = request.data['email']
             if User.objects.exclude(pk=pk).filter(email=new_email).exists():
                 return Response(
@@ -537,14 +634,20 @@ class StaffDetailView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             staff.email = new_email
+            print(f"DEBUG: Updated email to {new_email}")
+        
+        # Handle status update
+        if 'is_active' in request.data:
+            staff.is_active = request.data['is_active']
+            print(f"DEBUG: Updated is_active to {staff.is_active}")
 
-        # Save the updated staff member
+        # Save the staff member
         staff.save()
-
-        return Response(
-            UserSerializer(staff).data, 
-            status=status.HTTP_200_OK
-        )
+        print(f"DEBUG: Staff saved. Final role: {staff.role}")
+        
+        # Return updated data
+        serializer = UserSerializer(staff)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class StaffDeleteView(APIView):
@@ -554,6 +657,7 @@ class StaffDeleteView(APIView):
 
     def delete(self, request, pk):
         user = request.user
+        print(f"DEBUG: StaffDeleteView - User {user.email} deleting staff {pk}")
 
         # Check if user has an agency
         if not user.agency:
@@ -562,9 +666,9 @@ class StaffDeleteView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Find the staff member (must be in same agency and role='staff')
+        # Find the staff member (must be in same agency)
         try:
-            staff = User.objects.get(pk=pk, role="staff", agency=user.agency)
+            staff = User.objects.get(pk=pk, agency=user.agency)
         except User.DoesNotExist:
             return Response(
                 {"error": "Staff member not found"}, 
@@ -580,6 +684,7 @@ class StaffDeleteView(APIView):
 
         # Delete the staff member
         staff.delete()
+        print(f"DEBUG: Deleted staff {staff.email}")
 
         return Response(
             {"message": "Staff member deleted successfully"}, 
@@ -624,13 +729,13 @@ def upload_profile_picture(request):
     serializer = UserSerializer(user)
     return Response(serializer.data)
 
-# users/views.py - Add this view
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upload_staff_picture(request, staff_id):
     """Upload profile picture for a staff member"""
     try:
-        staff = User.objects.get(id=staff_id, role='staff')
+        staff = User.objects.get(id=staff_id, agency=request.user.agency)
     except User.DoesNotExist:
         return Response({'error': 'Staff member not found'}, status=404)
     
@@ -642,172 +747,3 @@ def upload_staff_picture(request, staff_id):
     
     serializer = UserSerializer(staff)
     return Response(serializer.data)
-
-# users/views.py - Remove the first CreateStaffView (without phone) and keep this one:
-
-class CreateStaffView(APIView):
-    """Create a new staff member under the same agency"""
-    
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-
-        # Check if user has an agency
-        if not user.agency:
-            return Response(
-                {"error": "No agency linked to your account"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Check if user has permission
-        if user.role not in ["admin", "staff"]:
-            return Response(
-                {"error": "You don't have permission to create staff members"}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        # Get data from request
-        email = request.data.get("email")
-        first_name = request.data.get("first_name")
-        last_name = request.data.get("last_name")
-        phone = request.data.get("phone", "")
-
-        # Validate required fields
-        if not all([email, first_name, last_name]):
-            return Response(
-                {"error": "Email, first name, and last name are required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Check if email already exists
-        if User.objects.filter(email=email).exists():
-            return Response(
-                {"error": "A user with this email already exists"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Generate random temporary password
-        temp_password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
-
-        # Create the staff user
-        try:
-            staff = User.objects.create_user(
-                email=email,
-                password=temp_password,
-                first_name=first_name,
-                last_name=last_name,
-                role="staff",
-                agency=user.agency,
-                phone=phone
-            )
-
-            return Response({
-                "message": "Staff member created successfully",
-                "user": UserSerializer(staff).data,
-                "temp_password": temp_password
-            }, status=status.HTTP_201_CREATED)
-            
-        except Exception as e:
-            return Response(
-                {"error": f"Failed to create staff member: {str(e)}"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-
-class StaffDetailView(APIView):
-    """Update a specific staff member's details"""
-    
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        user = request.user
-
-        if not user.agency:
-            return Response(
-                {"error": "No agency linked to your account"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            staff = User.objects.get(pk=pk, role="staff", agency=user.agency)
-        except User.DoesNotExist:
-            return Response(
-                {"error": "Staff member not found"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # Update fields
-        if 'first_name' in request.data:
-            staff.first_name = request.data['first_name']
-        
-        if 'last_name' in request.data:
-            staff.last_name = request.data['last_name']
-        
-        if 'phone' in request.data:
-            staff.phone = request.data['phone']
-            print(f"DEBUG: Updating phone for {staff.email} to: {staff.phone}")  # Debug log
-        
-        if 'email' in request.data:
-            new_email = request.data['email']
-            if User.objects.exclude(pk=pk).filter(email=new_email).exists():
-                return Response(
-                    {"error": "A user with this email already exists"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            staff.email = new_email
-
-        staff.save()
-
-        # Return updated data
-        serializer = UserSerializer(staff)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
-    
-class StaffDetailView(APIView):
-    """Update a specific staff member's details"""
-    
-    permission_classes = [permissions.IsAuthenticated]
-
-    def patch(self, request, pk):
-        user = request.user
-
-        if not user.agency:
-            return Response(
-                {"error": "No agency linked to your account"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            staff = User.objects.get(pk=pk, role="staff", agency=user.agency)
-        except User.DoesNotExist:
-            return Response(
-                {"error": "Staff member not found"}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # Update fields
-        if 'first_name' in request.data:
-            staff.first_name = request.data['first_name']
-        
-        if 'last_name' in request.data:
-            staff.last_name = request.data['last_name']
-        
-        if 'phone' in request.data:  # ADD THIS
-            staff.phone = request.data['phone']
-        
-        if 'email' in request.data:
-            new_email = request.data['email']
-            if User.objects.exclude(pk=pk).filter(email=new_email).exists():
-                return Response(
-                    {"error": "A user with this email already exists"}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            staff.email = new_email
-
-        staff.save()
-
-        return Response(
-            UserSerializer(staff).data, 
-            status=status.HTTP_200_OK
-        )

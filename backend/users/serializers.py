@@ -5,8 +5,10 @@ from django.contrib.auth.password_validation import validate_password
 from .models import User
 
 
+# users/serializers.py - Make sure role is in fields and can be updated
+
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer for User model - follows CypHX naming conventions"""
+    """Serializer for User model"""
     
     full_name = serializers.SerializerMethodField()
     agency_name = serializers.SerializerMethodField()
@@ -18,9 +20,9 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'first_name', 'last_name', 'full_name',
             'role', 'is_active', 'created_at', 'agency', 'agency_id', 
-            'agency_name', 'picture', 'picture_url', 'phone'  # ADD 'phone' HERE
+            'agency_name', 'picture', 'picture_url', 'phone'
         ]
-        read_only_fields = ['id', 'role', 'created_at', 'is_active']
+        read_only_fields = ['id', 'created_at']  # Remove 'role' from read_only_fields to allow updates
     
     def get_full_name(self, obj):
         """Returns user's full name - explicit verb naming"""

@@ -1,4 +1,3 @@
-# backend/payments/views.py - COMPLETE FIXED VERSION
 
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -24,7 +23,7 @@ class DashboardKPIsView(APIView):
         # Filter payouts based on user role
         if user.role == 'admin':
             payouts = Payout.objects.all()
-        elif user.role == 'staff':
+        elif user.role == 'finance_staff' or user.role == 'agency_manager':
             payouts = Payout.objects.filter(agency=user.agency)
         elif user.role == 'owner':
             payouts = Payout.objects.filter(owner=user)
@@ -73,7 +72,7 @@ class PayoutListView(generics.ListCreateAPIView):
         user = self.request.user
         if user.role == 'admin':
             return Payout.objects.all().select_related('owner', 'property', 'financial_record')
-        elif user.role == 'staff':
+        elif user.role == 'finance_staff' or user.role == 'agency_manager':
             return Payout.objects.filter(agency=user.agency).select_related('owner', 'property', 'financial_record')
         elif user.role == 'owner':
             return Payout.objects.filter(owner=user).select_related('property', 'financial_record')
@@ -134,7 +133,7 @@ class PayoutSummaryView(APIView):
         # Get all payouts based on role
         if user.role == 'admin':
             payouts = Payout.objects.all().select_related('owner', 'property', 'financial_record')
-        elif user.role == 'staff':
+        elif user.role == 'finance_staff' or user.role == 'agency_manager':
             payouts = Payout.objects.filter(agency=user.agency).select_related('owner', 'property', 'financial_record')
         elif user.role == 'owner':
             payouts = Payout.objects.filter(owner=user).select_related('property', 'financial_record')
@@ -363,7 +362,7 @@ class PaymentHistoryView(generics.ListAPIView):
         user = self.request.user
         if user.role == 'admin':
             return Payment.objects.all().select_related('owner', 'property')
-        elif user.role == 'staff':
+        elif user.role == 'finance_staff' or user.role == 'agency_manager':
             return Payment.objects.filter(agency=user.agency).select_related('owner', 'property')
         elif user.role == 'owner':
             return Payment.objects.filter(owner=user).select_related('property')
@@ -379,7 +378,7 @@ class PendingAlertsView(generics.ListAPIView):
         user = self.request.user
         if user.role == 'admin':
             return PaymentAlert.objects.filter(is_read=False)[:10]
-        elif user.role == 'staff':
+        elif user.role == 'finance_staff' or user.role == 'agency_manager':
             return PaymentAlert.objects.filter(agency=user.agency, is_read=False)[:10]
         elif user.role == 'owner':
             return PaymentAlert.objects.filter(payout__owner=user, is_read=False)[:10]
@@ -406,7 +405,7 @@ def mark_all_alerts_read(request):
     user = request.user
     if user.role == 'admin':
         PaymentAlert.objects.filter(is_read=False).update(is_read=True)
-    elif user.role == 'staff':
+    elif user.role == 'finance_staff' or user.role == 'agency_manager':
         PaymentAlert.objects.filter(agency=user.agency, is_read=False).update(is_read=True)
     elif user.role == 'owner':
         PaymentAlert.objects.filter(payout__owner=user, is_read=False).update(is_read=True)
@@ -434,7 +433,7 @@ def payment_analytics(request):
     # Filter payouts based on user role
     if user.role == 'admin':
         payouts = Payout.objects.all()
-    elif user.role == 'staff':
+    elif user.role == 'finance_staff' or user.role == 'agency_manager':
         payouts = Payout.objects.filter(agency=user.agency)
     elif user.role == 'owner':
         payouts = Payout.objects.filter(owner=user)
@@ -479,7 +478,7 @@ def generate_payouts_from_financials(request):
     # Get financial records without payouts
     if user.role == 'admin':
         financial_records = FinancialRecord.objects.filter(payouts__isnull=True)
-    elif user.role == 'staff':
+    elif user.role == 'finance_staff' or user.role == 'agency_manager':
         financial_records = FinancialRecord.objects.filter(
             property__agency=user.agency,
             payouts__isnull=True

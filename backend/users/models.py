@@ -19,23 +19,28 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_superuser', True)
         return self.create_user(email, password, **extra_fields)
 
+# users/models.py - Update the Role choices
+
 class User(AbstractBaseUser, PermissionsMixin):
     class Role(models.TextChoices):
+        SUPER_ADMIN = 'super_admin', 'Super Admin'
         ADMIN = 'admin', 'Admin'
-        STAFF = 'staff', 'Staff'
+        AGENCY_MANAGER = 'agency_manager', 'Agency Manager'
+        FINANCE_STAFF = 'finance_staff', 'Finance Staff'
+        PROPERTY_STAFF = 'property_staff', 'Property Staff'
         OWNER = 'owner', 'Owner'
+        STAFF = 'staff', 'Staff'
 
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    role = models.CharField(max_length=10, choices=Role.choices, default=Role.STAFF)
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.PROPERTY_STAFF)  # Changed max_length to 20
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
-    phone = models.CharField(max_length=20, blank=True, null=True)  # ADD THIS LINE
-    picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)  # ADD THIS IF NOT EXISTS
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
     
-    # Use string reference to avoid circular import
     agency = models.ForeignKey('agencies.Agency', on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
 
     objects = UserManager()

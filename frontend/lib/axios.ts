@@ -1,4 +1,4 @@
-// lib/axios.ts - FIXED TO MATCH YOUR URL STRUCTURE
+// lib/axios.ts - FIXED VERSION
 
 import axios from 'axios';
 
@@ -11,12 +11,18 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add token
+// Request interceptor to add token (EXCLUDE login and refresh endpoints)
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access');
-  if (token) {
+  
+  // Skip adding token for login and refresh endpoints
+  const skipAuthUrls = ['/api/users/login/', '/api/token/refresh/'];
+  const shouldSkipAuth = skipAuthUrls.some(url => config.url?.includes(url));
+  
+  if (token && !shouldSkipAuth) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
   return config;
 });
 
@@ -26,12 +32,15 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Don't try to refresh for login endpoint
+    const isLoginEndpoint = originalRequest.url?.includes('/api/users/login/');
+    
+    if (error.response?.status === 401 && !originalRequest._retry && !isLoginEndpoint) {
       originalRequest._retry = true;
 
       try {
         const refresh = localStorage.getItem('refresh');
-        const res = await axios.post(`${API_URL}/api/token/refresh/`, {  // Changed from /api/refresh/ to /api/token/refresh/
+        const res = await axios.post(`${API_URL}/api/token/refresh/`, {
           refresh,
         });
 
@@ -52,7 +61,7 @@ api.interceptors.response.use(
   }
 );
 
-// Get current user - NOW CORRECT: /api/users/me/
+// Get current user
 export const getCurrentUser = async () => {
   try {
     const response = await api.get('/api/users/me/');
@@ -69,13 +78,13 @@ interface UpdateUserProfileData {
   email?: string;
 }
 
-// Update user profile - /api/users/profile/update/
+// Update user profile
 export const updateUserProfile = async (data: UpdateUserProfileData) => {
   const response = await api.patch('/api/users/profile/update/', data);
   return response.data;
 };
 
-// Upload profile image - /api/users/profile/upload-picture/
+// Upload profile image
 export const uploadProfileImage = async (file: File) => {
   const formData = new FormData();
   formData.append('picture', file);

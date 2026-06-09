@@ -99,7 +99,7 @@ def revenue_stats(request):
     # Get properties based on user role
     if user.role == 'admin':
         properties = Property.objects.all()
-    elif user.role == 'staff':
+    elif user.role in ['property_staff', 'agency_manager', 'finance_staff']:
         properties = Property.objects.filter(agency=user.agency)
     else:
         properties = Property.objects.filter(owner__user=user)
@@ -165,7 +165,7 @@ def revenue_records(request):
     # Get properties based on user role
     if user.role == 'admin':
         properties = Property.objects.all()
-    elif user.role == 'staff':
+    elif user.role in ['property_staff', 'agency_manager', 'finance_staff']:
         properties = Property.objects.filter(agency=user.agency)
     else:
         properties = Property.objects.filter(owner__user=user)
@@ -223,7 +223,7 @@ def revenue_summary(request):
     # Get properties based on user role
     if user.role == 'admin':
         properties = Property.objects.all()
-    elif user.role == 'staff':
+    elif user.role in ['property_staff', 'agency_manager', 'finance_staff']:
         properties = Property.objects.filter(agency=user.agency)
     else:
         properties = Property.objects.filter(owner__user=user)
@@ -263,7 +263,7 @@ def get_properties(request):
     # Get properties based on user role
     if user.role == 'admin':
         properties = Property.objects.all()
-    elif user.role == 'staff':
+    elif user.role in ['property_staff', 'agency_manager', 'finance_staff']:
         properties = Property.objects.filter(agency=user.agency)
     elif user.role == 'owner':
         properties = Property.objects.filter(owner__user=user)
@@ -341,7 +341,7 @@ def financial_record_detail(request, record_id):
     user = request.user
     if user.role == 'admin':
         pass
-    elif user.role == 'staff' and record.property.agency != user.agency:
+    elif user.role in ['property_staff', 'agency_manager', 'finance_staff'] and record.property.agency != user.agency:
         return Response({'error': 'Permission denied'}, status=403)
     elif user.role == 'owner' and record.property.owner.user != user:
         return Response({'error': 'Permission denied'}, status=403)
@@ -409,7 +409,7 @@ def expense_list(request):
     if request.method == 'GET':
         if user.role == 'admin':
             properties = Property.objects.all()
-        elif user.role == 'staff':
+        elif user.role in ['property_staff', 'agency_manager', 'finance_staff']:
             properties = Property.objects.filter(agency=user.agency)
         else:
             properties = Property.objects.filter(owner__user=user)
@@ -499,7 +499,7 @@ def get_reports(request):
     
     if user.role == 'admin':
         properties = Property.objects.all()
-    elif user.role == 'staff':
+    elif user.role in ['property_staff', 'agency_manager', 'finance_staff']:
         properties = Property.objects.filter(agency=user.agency)
     else:
         properties = Property.objects.filter(owner__user=user)
@@ -582,7 +582,7 @@ def property_occupancy(request, property_id):
     # Check permissions
     if user.role == 'admin':
         pass
-    elif user.role == 'staff' and property_obj.agency != user.agency:
+    elif user.role in ['property_staff', 'agency_manager', 'finance_staff'] and property_obj.agency != user.agency:
         return Response({'error': 'Permission denied'}, status=403)
     elif user.role == 'owner' and property_obj.owner and property_obj.owner.user != user:
         return Response({'error': 'Permission denied'}, status=403)
@@ -666,4 +666,3 @@ def property_occupancy(request, property_id):
         'total_stays': total_stays,
         'monthly_breakdown': monthly_breakdown
     })
-
